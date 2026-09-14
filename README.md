@@ -7,6 +7,17 @@ DSH（DeepSeek Harness）插件。给 agent 一个快捷入口：把工作区里
 
 仓库：<https://github.com/liceses/dsh-showme-html>
 
+![showme-report 的展示卡片](docs/screenshots/overview.png)
+
+上图是一次真实交付，一屏里把三件事都拍到了：
+
+- **卡片头部** —— `show_html` 徽章、标题、体积，以及 刷新 / 全屏 / 浏览器打开；
+- **页面本体** —— 瑞士国际主义皮肤，顶部那排还能现场换皮肤（换的只是那一个 `<link>`）；
+- **底部的反馈条** —— `pain-markdown 补充` 就是用户在页面上点选之后，由**页面替他组织好**的一行回执。
+  他接着按「填入输入框」，这句话就追加进了对话输入框。
+
+---
+
 ---
 
 ## 它解决什么
