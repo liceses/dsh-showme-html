@@ -365,6 +365,42 @@ check('execute 返回 path 与 bytes', () =>
 )
 check('没有会话 id 时 url 为空串（不编造地址）', () => assert.equal(ok.url, ''))
 
+// ── 回执体检：页面缺"让用户回话"的部分时，提醒随工具结果回到模型眼前 ──
+console.log('\n[工具] 回执体检')
+
+check('裸页面（没有回执）会被点名提醒', () => {
+  assert.match(ok.hint, /Host check/)
+  assert.match(ok.hint, /pointable ids/)
+  assert.match(ok.hint, /copyable summary/)
+})
+
+check('render 把提醒带给模型；没有提醒时不夹带', () => {
+  const withHint = tool.output.render({}, { path: 'a.html', hint: 'HINT-X' })
+  assert.match(withHint[0].text, /a\.html/)
+  assert.match(withHint[0].text, /HINT-X/)
+  const clean = tool.output.render({}, { path: 'a.html', hint: '' })
+  assert.ok(!/Host check/.test(clean[0].text), '干净页面不该被夹带提醒')
+})
+
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'with-receipt.html'),
+  '<div class="card" data-id="pain-a">x</div><textarea readonly></textarea>',
+  'utf8',
+)
+const withReceipt = await tool.execute({ path: '.dsh/showme/with-receipt.html' }, exec)
+check('带 data-id + readonly textarea 的页面不提醒', () => assert.equal(withReceipt.hint, ''))
+
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'half-receipt.html'),
+  '<div class="card" data-id="pain-a">x</div>',
+  'utf8',
+)
+const halfReceipt = await tool.execute({ path: '.dsh/showme/half-receipt.html' }, exec)
+check('只做了一半（有 id 没有汇总区）仍会被提醒', () => {
+  assert.match(halfReceipt.hint, /copyable summary/)
+  assert.ok(!/pointable ids/.test(halfReceipt.hint), 'id 那半边不该被点名')
+})
+
 // ── 预设样式落地（create-only） ──────────────────────────────────────────
 console.log('\n[工具] 预设样式落地')
 
