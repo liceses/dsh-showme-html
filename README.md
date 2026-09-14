@@ -2,7 +2,10 @@
 
 > 给 agent 一个**快捷入口**：把工作区里写好的 HTML 页直接展示在对话里，并让用户在页面上产生的反馈**快速回到 agent 手里**。
 
-DSH（DeepSeek Harness）插件。它不规定页面长什么样——长什么样由 agent 和 `showme-report` skill 决定。
+DSH（DeepSeek Harness）插件。它不规定页面长什么样——长什么样由 agent 和 `showme-report` skill 决定；
+但附了**四套预设样式**，让 AI 写出来的东西不至于一副"默认长相"。
+
+仓库：<https://github.com/liceses/dsh-showme-html>
 
 ---
 
@@ -51,12 +54,19 @@ DSH（DeepSeek Harness）插件。它不规定页面长什么样——长什么�
 ## 装
 
 ```powershell
+# 从 GitHub 直接装
+dsh plugin --profile web add "github:liceses/dsh-showme-html"
+
+# 或者从本地源码目录装（开发时用这个，改完源码好追踪）
 dsh plugin --profile web add "link:<本目录绝对路径>"
-# 重启 dsh web 后生效（宿主半区在启动时装载）
+
+# 两种方式都需要重启 dsh web 才生效（宿主半区在启动时装载）
 ```
 
 `dsh plugin add` 会自动把本包同时写进 profile 的 `dependencies` 与 `dsh.profile.bundles`，
 并并入 `dsh.bundle.patch` 声明的插件行（id `showme-html`）。
+
+> `github:` 装法不需要构建步骤——`lib/` 就是成品，仓库里没有编译产物之外的东西。
 
 卸载：
 
