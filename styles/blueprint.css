@@ -1,0 +1,207 @@
+/* ============================================================================
+   showme-report preset · blueprint —— 蓝图 / 工程图 (Blueprint)
+   ----------------------------------------------------------------------------
+   定位：讲结构、讲流程、讲依赖关系时用。它让页面读起来像一张技术图纸。
+   签名：深蓝底 + 网格 · 青色线条 · 全等宽 · 虚线框 · 坐标与标注感
+   适用：架构说明、数据流、时序、流程与依赖关系
+   避免：图文混排的评审、需要大量正文阅读的页面
+
+   吃的是共用语义标记——换皮肤不用改标记。
+   自包含：无 @import、无外链字体、无 url()。
+   ========================================================================= */
+
+/* ── 设计令牌 ───────────────────────────────────────────────────────────── */
+:root {
+  --paper: #08182c;
+  --surface: rgba(12, 34, 60, .72);
+  --surface-2: rgba(10, 28, 50, .8);
+  --ink: #d3e8ff;
+  --ink-2: #a8c6e4;
+  --muted: #6f90b3;
+
+  --grid: rgba(94, 234, 212, .07);
+  --grid-major: rgba(94, 234, 212, .12);
+  --line: rgba(125, 211, 252, .32);
+  --line-strong: rgba(125, 211, 252, .6);
+
+  --accent: #5eead4;      /* 青：结构与主路径 */
+  --accent-ink: #99f6e4;
+  --sky: #7dd3fc;         /* 天蓝：次要与标注 */
+  --warn: #fbbf24;
+  --bad: #fb7185;
+  --good: #5eead4;
+
+  --r: 0; --r-sm: 0; --r-pill: 0;
+  --shadow: none; --shadow-lift: none;
+
+  --f-hero: clamp(26px, 4.4vw, 42px);
+  --f-h2: clamp(18px, 2.2vw, 24px);
+  --f-h3: 16px;
+  --f-body: 14.5px;
+  --f-sm: 13px;
+  --f-xs: 11.5px;
+  --lh: 1.78;
+
+  --s1: 6px; --s2: 12px; --s3: 18px; --s4: 28px; --s5: 44px; --s6: 72px;
+  --measure: 1020px;
+
+  --mono: Consolas, "Cascadia Mono", ui-monospace, Menlo, monospace;
+  --font: var(--mono);
+}
+
+/* ── 基底（网格底纹是这套风格的身份证） ─────────────────────────────────── */
+* { box-sizing: border-box; }
+body {
+  margin: 0; color: var(--ink);
+  font: var(--f-body)/var(--lh) var(--mono);
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+  background-position: -1px -1px;
+}
+.page { max-width: var(--measure); margin: 0 auto; padding: var(--s6) var(--s4) 110px; }
+p { margin: 0 0 var(--s3); }
+a { color: var(--sky); text-decoration: none; border-bottom: 1px dashed var(--line-strong); }
+a:hover { color: var(--accent); border-bottom-style: solid; }
+b, strong { color: #fff; font-weight: 700; }
+code { font-family: var(--mono); font-size: .94em; background: var(--surface-2); border: 1px solid var(--line); padding: 0 5px; color: var(--accent-ink); }
+.muted { color: var(--muted); }
+.mark { background: rgba(94, 234, 212, .16); border: 1px solid var(--accent); color: var(--accent-ink); padding: 0 5px; }
+.rule { border: 0; border-top: 1px dashed var(--line); margin: var(--s5) 0; }
+
+/* 图纸标注感：小节编号用 [  ] 括起来 */
+.section > h2::before { content: "["; color: var(--sky); margin-right: 6px; }
+.section > h2::after { content: "]"; color: var(--sky); margin-left: 6px; }
+
+/* ── 报头 ───────────────────────────────────────────────────────────────── */
+.masthead {
+  border: 1px dashed var(--line-strong); background: var(--surface);
+  padding: var(--s4); margin-bottom: var(--s5); position: relative;
+}
+.masthead::before {
+  content: "DRAWING"; position: absolute; top: -9px; left: 14px; padding: 0 6px;
+  background: var(--paper); font: 700 var(--f-xs)/1 var(--mono);
+  letter-spacing: .22em; color: var(--sky);
+}
+.kicker {
+  display: inline-block; font: 700 var(--f-xs)/1 var(--mono); letter-spacing: .22em; text-transform: uppercase;
+  color: var(--accent); border: 1px solid var(--line-strong); padding: 4px 9px; margin-bottom: var(--s3);
+}
+.masthead h1 {
+  font-size: var(--f-hero); line-height: 1.22; letter-spacing: .01em; font-weight: 700;
+  margin: 0 0 var(--s3); color: #fff;
+}
+.lead { color: var(--ink-2); margin: 0 0 var(--s3); max-width: 74ch; }
+.meta { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); font-size: var(--f-xs); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+/* ── 小节 ───────────────────────────────────────────────────────────────── */
+.section { margin-top: var(--s6); }
+.section > h2 {
+  font-size: var(--f-h2); line-height: 1.3; font-weight: 700; letter-spacing: .04em;
+  margin: 0 0 var(--s4); color: #fff;
+}
+.section > h2 small { display: block; font-size: var(--f-sm); font-weight: 400; letter-spacing: 0; color: var(--muted); margin-top: 4px; }
+h3 { font-size: var(--f-h3); font-weight: 700; letter-spacing: .04em; color: var(--accent); margin: var(--s4) 0 var(--s2); }
+
+/* ── 卡片与网格 ─────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface); border: 1px dashed var(--line); padding: var(--s4);
+  transition: border-color .15s, background-color .15s;
+}
+.card:hover { border-color: var(--accent); border-style: solid; background: rgba(16, 44, 74, .8); }
+.card > :last-child { margin-bottom: 0; }
+.cols { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); margin: var(--s4) 0; }
+.cols.two { grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); }
+
+.stat { display: flex; align-items: baseline; gap: var(--s3); }
+.stat .num {
+  font-size: 34px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums;
+  border-bottom: 2px solid var(--accent); padding-bottom: 2px;
+}
+.stat span { font-size: var(--f-xs); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+
+/* ── 标签 ───────────────────────────────────────────────────────────────── */
+.chips { display: flex; flex-wrap: wrap; gap: var(--s2); margin: var(--s2) 0 var(--s3); }
+.chip {
+  font-size: var(--f-xs); letter-spacing: .06em; color: var(--ink-2);
+  border: 1px solid var(--line); padding: 3px 9px; white-space: nowrap;
+}
+.chip.accent { border-color: var(--accent); color: var(--accent); background: rgba(94, 234, 212, .08); }
+
+/* ── 按钮 ───────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  font: 700 var(--f-sm)/1 var(--mono); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--accent); background: rgba(94, 234, 212, .06);
+  border: 1px solid var(--accent); border-radius: 0; padding: 10px 16px;
+  transition: background-color .12s, color .12s;
+}
+.btn:hover { background: var(--accent); color: #04231f; }
+.btn.primary { background: var(--accent); color: #04231f; }
+.btn.primary:hover { background: #99f6e4; }
+
+/* ── 表格 ───────────────────────────────────────────────────────────────── */
+.table { width: 100%; border-collapse: collapse; font-size: var(--f-sm); margin: var(--s3) 0; background: var(--surface-2); }
+.table th, .table td { text-align: left; padding: 10px 13px; border: 1px dashed var(--line); vertical-align: top; }
+.table thead th {
+  font-size: var(--f-xs); letter-spacing: .14em; text-transform: uppercase;
+  color: var(--accent); border-bottom: 1px solid var(--accent); background: rgba(94, 234, 212, .06);
+}
+.table tbody tr:hover td { background: rgba(94, 234, 212, .05); }
+.table td.num { font-variant-numeric: tabular-nums; color: var(--sky); }
+
+/* ── 结论条 ─────────────────────────────────────────────────────────────── */
+.callout {
+  border: 1px dashed var(--line-strong); border-left: 3px solid var(--accent);
+  background: var(--surface); padding: var(--s3) var(--s4); margin: var(--s4) 0;
+}
+.callout > :last-child { margin-bottom: 0; }
+.callout .label {
+  display: block; font-size: var(--f-xs); font-weight: 700; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 5px;
+}
+.callout.good { border-left-color: var(--accent); }
+.callout.warn { border-left-color: var(--warn); }
+.callout.warn .label { color: var(--warn); }
+.callout.bad { border-left-color: var(--bad); }
+.callout.bad .label { color: var(--bad); }
+
+/* ── 证据图（当成"图示"而不是"照片"） ───────────────────────────────────── */
+.evidence { margin: var(--s4) 0; border: 1px dashed var(--line); padding: var(--s2); background: var(--surface); }
+.evidence img { display: block; width: 100%; height: auto; background: var(--surface-2); }
+.evidence figcaption {
+  font-size: var(--f-xs); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); margin-top: var(--s2); padding-top: var(--s1); border-top: 1px dashed var(--line);
+}
+
+/* ── 时间线（节点像接线端子） ───────────────────────────────────────────── */
+.timeline { list-style: none; margin: var(--s4) 0; padding: 0; counter-reset: t; }
+.timeline li {
+  counter-increment: t; position: relative; padding: 0 0 var(--s3) var(--s5);
+  font-size: var(--f-sm); color: var(--ink-2); border-left: 1px dashed var(--line);
+}
+.timeline li::before {
+  content: counter(t, decimal-leading-zero); position: absolute; left: -14px; top: 0;
+  background: var(--paper); border: 1px solid var(--accent); color: var(--accent);
+  font: 700 var(--f-xs)/1 var(--mono); padding: 2px 4px;
+}
+.timeline li b { display: block; color: #fff; font-weight: 700; font-size: var(--f-body); margin-bottom: 2px; }
+
+/* ── 键值表 ─────────────────────────────────────────────────────────────── */
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 0; margin: var(--s3) 0; font-size: var(--f-sm); border: 1px dashed var(--line); }
+.kv dt, .kv dd { padding: 9px 13px; border-bottom: 1px dashed var(--line); }
+.kv dt { color: var(--sky); letter-spacing: .08em; text-transform: uppercase; font-size: var(--f-xs); }
+.kv dd { margin: 0; color: var(--ink); }
+.kv dt:last-of-type, .kv dd:last-of-type { border-bottom: 0; }
+
+/* ── 代码 ───────────────────────────────────────────────────────────────── */
+.code {
+  margin: var(--s3) 0; padding: var(--s3) var(--s4); overflow: auto; position: relative;
+  background: var(--surface-2); border: 1px dashed var(--line-strong);
+  font: 13px/1.75 var(--mono); color: var(--accent-ink); tab-size: 2;
+}
+.code code { background: none; border: 0; padding: 0; font-size: inherit; color: inherit; }

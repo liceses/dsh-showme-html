@@ -1,0 +1,202 @@
+/* ============================================================================
+   showme-report preset · swiss —— 瑞士国际主义 / 编辑部 (Swiss / Editorial)
+   ----------------------------------------------------------------------------
+   定位：让汇报显得"克制、有编辑判断"。信息密度靠版面层次撑，不靠颜色。
+   签名：白底 · 巨大标题 · 严格网格 · 无圆角 · 极细分割线 · 大留白 · 一点瑞士红
+   适用：编辑部式长文、结论多的分析、需要权威感的汇报
+   避免：大量并排卡片、需要活跃交互的页面
+
+   吃的是共用语义标记——换皮肤不用改标记。
+   自包含：无 @import、无外链字体、无 url()。
+   ========================================================================= */
+
+/* ── 设计令牌 ───────────────────────────────────────────────────────────── */
+:root {
+  --paper: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f4f4f4;
+  --ink: #0d0d0d;
+  --ink-2: #3c3c3c;
+  --muted: #8a8a8a;
+  --line: #e2e2e2;          /* 极细分割线 */
+  --line-strong: #0d0d0d;   /* 强调分割线：纯黑 */
+
+  --accent: #d0021b;        /* 瑞士红：只用于极少量强调 */
+  --accent-ink: #b00016;
+  --accent-line: #f2c6cb;
+
+  /* 瑞士派不用圆角、不用投影——全部归零，这不是省略，是主张 */
+  --r: 0; --r-sm: 0; --r-pill: 0;
+  --shadow: none; --shadow-lift: none;
+
+  /* 字号刻度：跨度拉大，这是"高级感"的真正来源 */
+  --f-hero: clamp(38px, 7.4vw, 78px);
+  --f-h2: clamp(22px, 3vw, 32px);
+  --f-h3: 18px;
+  --f-body: 16px;
+  --f-sm: 14px;
+  --f-xs: 11.5px;
+  --lh: 1.72;
+
+  --s1: 6px; --s2: 12px; --s3: 20px; --s4: 32px; --s5: 56px; --s6: 96px;
+  --measure: 1060px;
+
+  --font: "Helvetica Neue", Helvetica, Arial, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0d0d0d; --surface: #121212; --surface-2: #1a1a1a;
+    --ink: #f4f4f4; --ink-2: #c9c9c9; --muted: #8a8a8a;
+    --line: #2a2a2a; --line-strong: #f4f4f4;
+    --accent: #ff3b52; --accent-ink: #ff6b7d; --accent-line: #5c1a22;
+  }
+}
+
+/* ── 基底 ───────────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: var(--f-body)/var(--lh) var(--font);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.page { max-width: var(--measure); margin: 0 auto; padding: var(--s6) var(--s4) 120px; }
+p { margin: 0 0 var(--s3); max-width: 68ch; }
+a { color: var(--accent-ink); text-decoration: none; border-bottom: 1px solid var(--accent-line); }
+a:hover { border-bottom-color: var(--accent); }
+b, strong { font-weight: 700; }
+code { font-family: var(--mono); font-size: .88em; background: var(--surface-2); padding: 1px 4px; }
+.muted { color: var(--muted); }
+.mark { background: var(--accent); color: #fff; padding: 0 4px; }
+.rule { border: 0; border-top: 1px solid var(--line-strong); margin: var(--s5) 0; }
+
+/* ── 报头 ───────────────────────────────────────────────────────────────── */
+.masthead {
+  margin-bottom: var(--s6); padding-bottom: var(--s4);
+  border-bottom: 3px solid var(--line-strong);
+}
+.kicker {
+  display: block; font-size: var(--f-xs); font-weight: 700;
+  letter-spacing: .22em; text-transform: uppercase; color: var(--accent);
+  margin-bottom: var(--s3);
+}
+.masthead h1 {
+  font-size: var(--f-hero); line-height: 1.02; letter-spacing: -.035em;
+  font-weight: 700; margin: 0 0 var(--s3); max-width: 20ch;
+}
+.lead {
+  font-size: clamp(17px, 1.8vw, 21px); line-height: 1.58; color: var(--ink-2);
+  margin: 0 0 var(--s4); max-width: 54ch;
+}
+.meta {
+  display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4);
+  font-size: var(--f-xs); letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+}
+
+/* ── 小节 ───────────────────────────────────────────────────────────────── */
+.section { margin-top: var(--s6); }
+.section > h2 {
+  font-size: var(--f-h2); line-height: 1.2; letter-spacing: -.02em; font-weight: 700;
+  margin: 0 0 var(--s4); padding-top: var(--s2); border-top: 3px solid var(--line-strong);
+}
+.section > h2 small {
+  display: block; font-size: var(--f-sm); font-weight: 400; letter-spacing: 0;
+  color: var(--muted); margin-top: 6px;
+}
+h3 { font-size: var(--f-h3); font-weight: 700; letter-spacing: -.01em; margin: var(--s4) 0 var(--s2); }
+
+/* ── 卡片与网格 ─────────────────────────────────────────────────────────── */
+/* 瑞士派里"卡片"不是盒子，是分栏：靠竖线分隔，不靠背景和阴影 */
+.card { padding: 0; background: none; border: 0; }
+.card > :last-child { margin-bottom: 0; }
+.cols {
+  display: grid; gap: 0 var(--s4); margin: var(--s4) 0;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.cols.two { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.cols > .card { padding-left: var(--s4); border-left: 1px solid var(--line); }
+.cols > .card:first-child { padding-left: 0; border-left: 0; }
+
+.stat { display: flex; align-items: baseline; gap: var(--s2); }
+.stat .num {
+  font-size: clamp(32px, 4vw, 46px); font-weight: 700; letter-spacing: -.045em;
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+.stat span { font-size: var(--f-xs); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+/* ── 标签 ───────────────────────────────────────────────────────────────── */
+.chips { display: flex; flex-wrap: wrap; gap: 0 var(--s3); margin: var(--s2) 0 var(--s3); }
+.chip {
+  font-size: var(--f-xs); font-family: var(--mono); letter-spacing: .04em;
+  color: var(--ink-2); border-bottom: 1px solid var(--line); padding: 2px 0; white-space: nowrap;
+}
+.chip.accent { color: var(--accent); border-bottom-color: var(--accent-line); }
+
+/* ── 按钮 ───────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  font: 700 var(--f-xs)/1 var(--font); letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink); background: none; border: 2px solid var(--ink); border-radius: 0;
+  padding: 11px 18px; transition: background .12s, color .12s;
+}
+.btn:hover { background: var(--ink); color: var(--paper); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: var(--ink); border-color: var(--ink); }
+
+/* ── 表格 ───────────────────────────────────────────────────────────────── */
+.table { width: 100%; border-collapse: collapse; font-size: var(--f-sm); margin: var(--s4) 0; }
+.table th, .table td { text-align: left; padding: 12px 16px 12px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.table thead th {
+  font-size: var(--f-xs); font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink); border-bottom: 2px solid var(--line-strong);
+}
+.table tbody tr:last-child td { border-bottom: 1px solid var(--line); }
+.table td.num { font-variant-numeric: tabular-nums; font-family: var(--mono); }
+
+/* ── 结论条 ─────────────────────────────────────────────────────────────── */
+/* 不用背景色块，用一根黑竖线 + 放大字号——这是编辑部的做法 */
+.callout { border-left: 4px solid var(--line-strong); padding: var(--s1) 0 var(--s1) var(--s3); margin: var(--s4) 0; }
+.callout > :last-child { margin-bottom: 0; }
+.callout .label {
+  display: block; font-size: var(--f-xs); font-weight: 700; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
+}
+.callout.good { border-left-color: var(--ink); }
+.callout.warn { border-left-color: var(--accent); }
+.callout.bad { border-left-color: var(--accent); }
+
+/* ── 证据图 ─────────────────────────────────────────────────────────────── */
+.evidence { margin: var(--s4) 0; }
+.evidence img { display: block; width: 100%; height: auto; background: var(--surface-2); border: 1px solid var(--line); }
+.evidence figcaption {
+  font-size: var(--f-xs); color: var(--muted); margin-top: var(--s2);
+  padding-top: var(--s1); border-top: 1px solid var(--line);
+}
+
+/* ── 时间线 ─────────────────────────────────────────────────────────────── */
+.timeline { list-style: none; margin: var(--s4) 0; padding: 0; counter-reset: t; }
+.timeline li {
+  position: relative; padding: 0 0 var(--s3) var(--s5); font-size: var(--f-sm); color: var(--ink-2);
+  counter-increment: t; border-left: 1px solid var(--line);
+}
+.timeline li:last-child { border-left-color: transparent; }
+.timeline li::before {
+  content: counter(t, decimal-leading-zero); position: absolute; left: 0; top: -2px;
+  font: 700 var(--f-xs)/1 var(--mono); color: var(--accent); background: var(--paper); padding-right: 8px;
+}
+.timeline li b { display: block; font-size: var(--f-body); color: var(--ink); font-weight: 700; margin-bottom: 2px; }
+
+/* ── 键值表 ─────────────────────────────────────────────────────────────── */
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: var(--s2) var(--s4); margin: var(--s4) 0; font-size: var(--f-sm); }
+.kv dt { color: var(--muted); font-size: var(--f-xs); letter-spacing: .1em; text-transform: uppercase; padding-top: 2px; }
+.kv dd { margin: 0; color: var(--ink); }
+
+/* ── 代码 ───────────────────────────────────────────────────────────────── */
+.code {
+  margin: var(--s4) 0; padding: var(--s3) 0 var(--s3) var(--s3); overflow: auto;
+  background: none; border: 0; border-left: 3px solid var(--line-strong);
+  font: 13px/1.75 var(--mono); color: var(--ink-2); tab-size: 2;
+}
+.code code { background: none; padding: 0; font-size: inherit; }

@@ -1,0 +1,250 @@
+---
+name: showme-report
+description: 用一页 HTML 向用户汇报、并把用户的指认与表态快速收回来。当你要交付"需要看而不是读"的成果（方案对比、设计评审、多变体挑选、证据并排、进度台账），或者用户需要在一堆产物里点名、表态、挑选时使用。本 skill 只规定功能与交换格式，不规定版式、配色与页面结构——形式由你决定。
+whenToUse: 你准备用 HTML 页面代替长篇 Markdown 向用户汇报；或用户明确要求"用网页给我看""做成一个页面""我要挑/我要表态"；或这一轮产出了多个候选（方案/变体/截图/组件）需要用户指认。
+---
+
+# showme-report — 用一页 HTML 汇报，并让反馈回来
+
+## 0. 这个 skill 管什么、不管什么
+
+**管**（这些是"页面 ↔ 用户 ↔ 你"能闭环的前提，不是审美）：
+
+- 页面写到哪、怎么被展示
+- 页面要收用户反馈时，必须具备的功能点
+- 用户反馈回到你手里时的**统一文本格式**
+
+**不管**（自由发挥，每次都可以不一样）：
+
+- ❌ 版式、配色、字体、视觉风格
+- ❌ 章节数、顺序、是不是"汇报段 + 点名段"
+- ❌ 用哪些组件、单页还是拆多页
+- ❌ 每一页都必须带表态功能（不需要就别加）
+
+---
+
+## 1. 交付流程
+
+1. **挑一套皮肤**（见 §2）。默认 `soft`；没有特别理由就用它。
+2. **写页面**：用 `write` 写一个 HTML，路径放工作区里的
+   `.dsh/showme/<名字>.html`（隐藏目录，不污染源码树、不进 git）。
+   页面里第一行样式就是 `<link rel="stylesheet" href="presets/<slug>.css">`。
+3. **放资源**：图片 / 截图 / 组件页 / 下级 HTML 放在**页面旁边**（如
+   `.dsh/showme/stills/x.png`），页面里用**相对路径**引用。
+4. **展示**：调工具 `show_html({ path, title, note })`。
+   - `path` 必填，工作区相对路径。
+   - **不要**把 HTML 正文塞进工具参数——工具只收路径，正文会白烧一遍 token。
+5. **说一句**：在回复里告诉用户这页要他干什么（"看看要不要改""挑一个"），
+   以及反馈怎么给你（见 §4）。
+
+> 相对路径为什么能用：宿主有一条按工作区目录结构镜像的只读路由
+> `/api/showme/raw/<sessionId>/<工作区相对路径>`，页面就是从它在的那个目录被服务的，
+> 所以 `<img src="stills/a.png">`、`<link href="presets/soft.css">`、`shot-f3.html`
+> 全都按文件系统语义解析。**你不需要写任何绝对 URL 或前缀。**
+
+页面本身的 CSS/JS 一律内联；**只允许**外链两样东西：同目录的预设 CSS、以及页面自己的资源
+（图片 / 下级页）。不引 CDN、不引外部字体。页面会被放在 `sandbox` 的 iframe 里，
+也会被用户在真实浏览器里打开，两者的能力不同（见 §5）。
+
+---
+
+## 2. 样式：四套预设（**可选菜单 + 一个默认**）
+
+预设 = **同一份内容上的四张皮**。它们只管视觉语言（色、字、间距、边框、圆角、阴影、动效），
+**不管版式与结构**——排版决策仍然是你的事。
+
+清单在工作区 `.dsh/showme/presets/index.json`（宿主在你第一次展示页面时自动落到那里，
+**已存在的文件不会被覆盖**，所以用户可以自己改）。
+
+| slug | 名字 | 什么时候用 |
+|---|---|---|
+| `soft` | 柔和现代 | **默认**。通用汇报、进展同步、方案说明、需要长时间阅读 |
+| `swiss` | 瑞士国际主义 | 编辑部长文、结论多的分析、需要"克制与权威感" |
+| `brutal` | 新野兽派 | 设计评审、多变体挑选、需要强指认感 |
+| `blueprint` | 蓝图 / 工程图 | 架构说明、数据流、时序、流程与依赖关系 |
+
+引用方式（就这一行）：
+
+```html
+<link rel="stylesheet" href="presets/soft.css">
+```
+
+### 2.1 用预设就必须按共用语义标记写
+
+换皮肤**一个字都不改标记**，代价是标记要用约定好的名字。这不是版式约束，是**语义**约束：
+
+```html
+<div class="page">
+  <header class="masthead">
+    <div class="kicker">栏目/分类</div>
+    <h1>标题</h1>
+    <p class="lead">导语</p>
+    <div class="meta"><span>…</span><span>…</span></div>
+  </header>
+
+  <section class="section">
+    <h2>小节标题 <small>副标题</small></h2>
+    <div class="cols">                        <!-- 2–3 栏；.cols.two 是两栏 -->
+      <div class="card"><h3>…</h3><p>…</p></div>
+    </div>
+    <div class="stat"><b class="num">42</b><span>说明</span></div>
+    <table class="table"><thead><tr><th>…</th></tr></thead><tbody><tr><td>…</td></tr></tbody></table>
+    <div class="callout"><span class="label">结论</span>…</div>
+    <figure class="evidence"><img src="stills/x.png" alt=""><figcaption>图 1 · 说明</figcaption></figure>
+    <ol class="timeline"><li><b>节点</b>说明</li></ol>
+    <dl class="kv"><dt>键</dt><dd>值</dd></dl>
+    <pre class="code"><code>…</code></pre>
+    <div class="chips"><span class="chip">标签</span><span class="chip accent">强调</span></div>
+    <button class="btn">普通</button> <button class="btn primary">强调</button>
+    <hr class="rule">
+  </section>
+</div>
+```
+
+可用的修饰类：`.muted`（弱化）、`.mark`（行内高亮）、`.rule`（分割线）、
+`.cols.two`（两栏）、`.callout.good/.warn/.bad`、`.card.acid/.ink`（野兽派里尤其明显）、
+`.btn.primary`。
+
+**不用预设时，标记随便写。** 但一旦引了预设 CSS，就得用这套名字，否则那些样式落不到你的元素上。
+
+### 2.2 两条硬规则
+
+1. **不要改预设 CSS 里的颜色**。想要不同的感觉，就换一套预设，或者问用户。
+   在页面里覆盖预设令牌（`:root { --accent: … }`）只在有明确理由时做，并且要说出来。
+2. **不要混两套预设**。每套的令牌是内部自洽的，混着用会得到一锅粥。
+
+### 2.3 想用 StyleKit 目录里的其他风格
+
+[StyleKit](https://www.stylekit.top/zh/styles) 收了 148 种风格，每种的规格可以拉：
+
+```
+GET https://www.stylekit.top/api/styles/{slug}/md
+```
+
+**但它给的 tokens / components 是 Tailwind 类名与 React JSX，我们这里是单文件静态 HTML，
+直接用不了。** 正确做法是把它当**约束清单**，自己翻译成原生 CSS：
+
+- 能用：`colors`（原始 hex）、`doList` / `dontList`、`philosophy`、示例提示词。
+- 不能直接用：`tokens`（Tailwind 类名）、`components`（JSX）。
+- ⚠️ `globalCss` 里可能有与它自己 `dontList` 冲突的内容（例如 neo-brutalist 禁渐变，
+  它的 globalCss 里却定义了渐变类）。**以 doList/dontList 为准，别照抄 globalCss。**
+
+翻好之后按 §2 的共用语义标记写页面，并把皮肤 CSS 放到页面旁边用相对路径引用。
+
+---
+
+## 3. 功能点（**只在页面要收用户反馈时才适用**）
+
+用户的原话需求是："我有很多 AI 生成的图片或网页组件，我没办法一个一个准确叫出它们的
+名字，名字是 AI 可以给的；我希望我选择哪一个，就能得到它的名字用来和 AI 交流，
+还能表达我的意见，比如说同意，或者要某个组件的风格。"
+
+下面五条就是把这个需求变成可互操作的页面：
+
+| # | 必须做到 | 为什么 |
+|---|---|---|
+| **F1** | 每个可点名对象有**稳定、唯一、可粘贴的 id**（短 ASCII，无空格，如 `f3`、`hero-v3`、`shot-07`），并且**在页面上可见** | 这就是"手柄"。用户要能复制它、粘给你、你也认得出 |
+| **F2** | F1 的每个 id 都能**表态**（判定词自定）+ 能写**备注** | 用户"同意 / 不同意 / 要这个风格"就是靠它表达 |
+| **F3** | 页面能产出**一行一条**的汇总文本，格式见 §2.1 | 你和用户之间的互操作契约 |
+| **F4** | 汇总文本放在**可选中复制的 `<textarea>`** 里；**不依赖** `localStorage`、**不依赖** `navigator.clipboard`、**不依赖**服务器 | 见 §5：这三样在沙箱里都会坏 |
+| **F5** | 引用真实产物一律用**相对路径** | 靠 §1 的镜像路由才成立 |
+
+`F1` 的 id 词表由你定（`f1..f14`、`hero-v3`、`plan-a` 都行），但**一旦用了就要在页面上显示出来**，
+而且同一个页面内不许重名。
+
+### 3.1 统一交换格式（一行一条）
+
+```
+f1 OK
+f2 要改：数字太小，10000 不要写 1 万
+hero-v3 要改：颜色太灰，按 tabs-compact-v2 的风格来
+```
+
+- 结构：`<id> <判定词>[：备注]`
+- 判定词由页面自定（`OK` / `要改` / `同意` / `不同意` / `要这个风格` …），
+  但**页面必须把本页用到的判定词列出来**，让用户知道能填什么、你也知道收到了什么。
+- 备注可空；空备注就只回 `id 判定词`。
+
+解析与生成都很短，可以直接抄进页面的内联 JS（这段是**契约**，不是版式）：
+
+```js
+// 解析：一行一条 → [{id, verdict, note}]
+function parseLines(text) {
+  return text.split(/\r?\n/).map(function (line) { return line.trim(); }).filter(Boolean)
+    .map(function (line) {
+      var m = line.match(/^([A-Za-z0-9_.:-]+)\s+(\S+)\s*[:：]?\s*(.*)$/);
+      return m ? { id: m[1], verdict: m[2], note: m[3].trim() } : null;
+    }).filter(Boolean);
+}
+// 生成：一条 → 一行
+function toLine(item) {
+  return item.id + ' ' + item.verdict + (item.note ? '：' + item.note : '');
+}
+```
+
+> ⚠️ 如果你是用**脚本**生成页面（把 JS 拼进模板字符串里），正则和换行字面量一律
+> **写双反斜杠**（`\\r?\\n`、`\\n`）。单反斜杠会被模板字符串吃掉，拼出来的正则或字符串
+> 直接报 `Invalid regular expression` / `Invalid or unexpected token`——这个坑已经被踩过两次。
+
+---
+
+## 4. 反馈怎么回到你手里
+
+**默认通道（页面里放"可直接抄"的文本）**：这就是 F3/F4。用户复制那段文本粘给你，
+你按 §2.1 解析即可。它不依赖任何东西，永远可用。
+
+**加分通道 A · 交给卡片回填（推荐顺手实现，约 5 行）**：
+把汇总文本 postMessage 给父页面，展示卡片会给用户"填入输入框 / 复制"两个按钮。
+
+```js
+// 在用户点"发送反馈"或文本变化时
+if (window.parent !== window) {
+  window.parent.postMessage({ type: 'dsh-showme-feedback', text: 汇总文本 }, '*');
+}
+```
+
+卡片只认 `type: 'dsh-showme-feedback'` 且 `text` 非空的消息；它不依赖 iframe 的剪贴板权限，
+所以比页面自己复制可靠。
+
+**加分通道 B · 直接落盘**：页面 `POST /api/showme/feedback`，
+body `{ sessionId, text, page }`，宿主追加到 `<工作区>/.dsh/showme/inbox.jsonl`。
+页面在沙箱里不知道 sessionId，但可以从自己的地址里取：
+
+```js
+var sessionId = location.pathname.split('/')[3]; // /api/showme/raw/<sessionId>/...
+```
+
+这条不实现也完全没问题——A 和默认通道已经够用。
+
+---
+
+## 5. 沙箱硬约束（**已经实测撞过的墙，别再撞**）
+
+页面运行在 `sandbox="allow-scripts"` 且**没有** `allow-same-origin` 的 iframe 里，
+也就是**不透明源**。这带来三条必须遵守的约束：
+
+1. **`localStorage` 会直接抛异常**（不是返回 null，是 throw）。判定不要只存在 localStorage；
+   要存就 `try/catch`，并且必须有内存兜底 + 可导出的文本。
+   *已有先例*：一份评审页把判定存在 localStorage 里，结果"判定存在打开它的那个地址名下"，
+   换个地址打开就读不到了，只能再加一个"取出本机全部判定"的按钮来救。
+2. **`navigator.clipboard` 大概率被拒**。所以汇总文本**必须**放在能鼠标选中、能 Ctrl+C 的
+   `<textarea>` 里——这是唯一永远可用的复制方式。复制按钮可以加，但不能只有它。
+3. **表单提交、`alert/confirm`、文件下载在卡片里被拦**（真实浏览器里放开）。
+   页面别依赖它们；需要时提示用户走卡片的「浏览器打开」。
+
+另外：卡片是**安全模式**，页面在卡片里的能力是刻意收窄的；
+工具栏上的「浏览器打开」才是功能完整的那条路（那份响应带
+`Content-Security-Policy: sandbox`，所以它功能全开但仍然碰不到 DSH 应用本身）。
+两处的能力差异不必在页面里解释，卡片底部已经写了提示。
+
+---
+
+## 6. 什么时候别用这个
+
+- 普通问答、短回复——Markdown 更快更清楚。
+- 纯代码或长文——代码块和 Markdown 更合适。
+- 结论还没定型就做页面——你会在为一个还会变的东西写版式。
+- 只是想展示一张图——`read_image` 就够。
+- **同一轮里连着展示很多页**——先合并成一页；展示卡片是"一次交付"，不是日志。
+
+判断标准很简单：**这件事用户是"读"更省事，还是"看"更省事。** 后者才用。

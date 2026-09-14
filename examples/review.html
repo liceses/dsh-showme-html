@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>showmeWithHTML · 首次交付点认</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0b1020; --panel:#111c33; --panel2:#0e1730; --line:#22304d;
+    --tx:#e2e8f0; --tx2:#94a3b8; --tx3:#64748b;
+    --teal:#5eead4; --mag:#f0abfc; --violet:#a78bfa; --amber:#fcd34d; --rose:#fb7185;
+  }
+  body{background:var(--bg);color:var(--tx);font:14px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;padding:0 0 80px}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+  header{border-bottom:1px solid var(--line);background:linear-gradient(180deg,#101a30,#0b1020);padding:26px 0 22px}
+  h1{font-size:24px;letter-spacing:.5px}
+  h1 b{color:var(--teal)}
+  .sub{color:var(--tx2);font-size:13px;margin-top:6px}
+  .kv{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .kv span{font-family:Consolas,monospace;font-size:11.5px;color:var(--tx2);border:1px solid var(--line);border-radius:999px;padding:2px 10px;background:var(--panel2)}
+  h2{font-size:16px;margin:34px 0 12px;padding-left:11px;border-left:3px solid var(--teal)}
+  h2 small{color:var(--tx3);font-weight:400;font-size:12.5px;margin-left:8px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .panel + .panel{margin-top:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--tx3);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+  td:first-child{color:var(--tx2);white-space:nowrap;font-family:Consolas,monospace;font-size:12px;width:150px}
+  .diagram{display:block;width:100%;height:auto;border-radius:8px;border:1px solid var(--line)}
+  .cap{color:var(--tx3);font-size:12px;margin-top:8px}
+
+  .item{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:11px;transition:border-color .15s}
+  .item[data-v]{border-color:#3b4d73}
+  .item[data-v="同意"]{border-color:var(--teal)}
+  .item[data-v="要改"]{border-color:var(--amber)}
+  .item[data-v="不要"]{border-color:var(--rose)}
+  .ihead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .id{font-family:Consolas,monospace;font-size:12px;font-weight:700;color:#06231f;background:var(--teal);border-radius:5px;padding:1px 8px;user-select:all}
+  .ititle{font-size:14.5px;font-weight:600}
+  .idesc{color:var(--tx2);font-size:12.8px;margin-top:7px}
+  .idesc code{font-family:Consolas,monospace;font-size:12px;color:var(--violet);background:#181228;padding:1px 5px;border-radius:4px}
+  .row{display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .vbtn{cursor:pointer;font:inherit;font-size:12.5px;padding:4px 13px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--tx2);transition:.12s}
+  .vbtn:hover{border-color:#3b4d73;color:var(--tx)}
+  .vbtn[aria-pressed="true"][data-w="同意"]{background:var(--teal);border-color:var(--teal);color:#06231f;font-weight:600}
+  .vbtn[aria-pressed="true"][data-w="要改"]{background:var(--amber);border-color:var(--amber);color:#3a2a02;font-weight:600}
+  .vbtn[aria-pressed="true"][data-w="不要"]{background:var(--rose);border-color:var(--rose);color:#3d0812;font-weight:600}
+  input.note{flex:1;min-width:200px;font:inherit;font-size:12.5px;padding:5px 10px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--tx)}
+  input.note::placeholder{color:var(--tx3)}
+  input.note:focus{outline:none;border-color:var(--violet)}
+  .copy1{cursor:pointer;font:inherit;font-size:11.5px;padding:4px 9px;border-radius:6px;border:1px solid var(--line);background:transparent;color:var(--tx3)}
+  .copy1:hover{color:var(--tx);border-color:#3b4d73}
+
+  .words{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+  .w{font-family:Consolas,monospace;font-size:12px;border:1px solid var(--line);border-radius:5px;padding:1px 9px;color:var(--tx2);background:var(--panel2)}
+  textarea{width:100%;min-height:170px;resize:vertical;font-family:Consolas,monospace;font-size:12.8px;line-height:1.75;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--tx)}
+  textarea:focus{outline:none;border-color:var(--teal)}
+  .acts{display:flex;gap:9px;align-items:center;margin-top:11px;flex-wrap:wrap}
+  .btn{cursor:pointer;font:inherit;font-size:13px;padding:6px 16px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);color:var(--tx)}
+  .btn:hover{border-color:#3b4d73}
+  .btn.primary{background:var(--teal);border-color:var(--teal);color:#06231f;font-weight:600}
+  .msg{color:var(--tx3);font-size:12px;font-family:Consolas,monospace}
+  .warn{border-left:3px solid var(--amber);background:#241d0c;color:#f5e3b3;font-size:12.5px;padding:9px 13px;border-radius:0 8px 8px 0;margin-bottom:13px}
+  .done{color:var(--tx2);font-size:13px}
+  .done li{margin:3px 0 3px 18px}
+  footer{color:var(--tx3);font-size:12px;margin-top:34px;border-top:1px solid var(--line);padding-top:14px}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>showmeWithHTML · <b>首次交付点认</b></h1>
+  <div class="sub">这一页不是 Markdown 能表达的：它有可点选的手柄、有能粘回对话的文本、有一张按相对路径加载的架构图。</div>
+  <div class="kv">
+    <span>插件 dsh-showme-html</span><span>工具 show_html</span><span>skill showme-report</span>
+    <span>离线断言 75 项全过</span><span>宿主半区零外部依赖</span><span>零构建</span>
+  </div>
+</div></header>
+
+<div class="wrap">
+
+  <h2>① 这一轮做完了什么 <small>只列事实，细节你可以在对话里追问</small></h2>
+  <div class="panel">
+    <table>
+      <tr><th>部件</th><th>状态</th></tr>
+      <tr><td>show_html 工具</td><td>已注册进运行中的进程，本页就是它的第一次调用</td></tr>
+      <tr><td>镜像读路由</td><td>按工作区目录结构分发；<b>下面那张图就是相对路径加载的</b>，能看到图 = 路由通了</td></tr>
+      <tr><td>对话内卡片</td><td>头部有 刷新 / 全屏 / 浏览器打开；非可见时不挂 iframe</td></tr>
+      <tr><td>showme-report skill</td><td>已热发现生效（没重启就进了技能目录）</td></tr>
+      <tr><td>离线验收</td><td>宿主 46 项 + 客户端 29 项断言，覆盖穿越 403 / 回环围栏 / 错误态 / 草稿追加</td></tr>
+      <tr><td>待你确认</td><td>卡片在真实 GUI 里的渲染效果 —— 这一条我验不了，只有你能看到</td></tr>
+    </table>
+  </div>
+
+  <h2>② 数据流 <small>相对路径 assets/arch.svg —— 这张图本身就是一次路由验证</small></h2>
+  <div class="panel">
+    <img class="diagram" src="assets/arch.svg" alt="showmeWithHTML 数据流" />
+    <div class="cap">图里那条虚线就是你要做的事：在下面点选 → 拿到一行一条的文本 → 粘回对话。</div>
+  </div>
+
+  <h2>③ 逐项点认 <small>点判定、写备注；文本会实时生成在 ④</small></h2>
+  <div id="items"></div>
+
+  <h2>④ 汇总 <small>这段文本就是回执，选中复制或直接粘回对话</small></h2>
+  <div class="panel">
+    <div class="warn">
+      判定只存在<b>这个页面</b>里（沙箱里 localStorage 会抛异常，所以刻意不用它）。
+      刷新页面就没了 —— 所以请把下面的文本发给我。
+    </div>
+    <div class="words" id="words"></div>
+    <textarea id="out" readonly placeholder="在上面点选后，这里会出现一行一条的回执"></textarea>
+    <div class="acts">
+      <button class="btn primary" id="send">发送反馈给卡片</button>
+      <button class="btn" id="copy">复制全部</button>
+      <button class="btn" id="clear">清空判定</button>
+      <span class="msg" id="msg"></span>
+    </div>
+  </div>
+
+  <footer>
+    这一页由 <code>show_html</code> 展示；它自己没有任何外部依赖，断网也能看。
+    能力边界：卡片里表单/下载/弹窗被拦，需要它们请用卡片头部的「浏览器打开」。
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var WORDS = ['同意', '要改', '不要'];
+  var FEEDBACK_TYPE = 'dsh-showme-feedback';
+
+  var ITEMS = [
+    {
+      id: 'tool-entry',
+      title: '快捷入口：show_html 工具',
+      desc: 'agent 调一次就完成"把这一页给用户看"。参数只有 path/title/note，不收 HTML 正文——正文进参数会白烧一遍 token。'
+    },
+    {
+      id: 'mirror-route',
+      title: '镜像读路由：相对路径能用',
+      desc: '页面从它在工作区里的那个目录被服务，所以 <code>assets/arch.svg</code> 这种相对引用按文件系统语义解析。没有它，图片就得 base64 内联进 HTML。'
+    },
+    {
+      id: 'card-ui',
+      title: '对话内卡片：刷新 / 全屏 / 浏览器打开',
+      desc: '同一个地址两种档位：卡片内是安全模式（只跑脚本），「浏览器打开」功能完整但仍碰不到 DSH 应用。'
+    },
+    {
+      id: 'exchange-fmt',
+      title: '一行一条的交换格式',
+      desc: '<code>&lt;id&gt; &lt;判定词&gt;[：备注]</code> —— 这是你和 agent 之间的互操作契约，任何环境都能用，不依赖剪贴板也不依赖服务器。'
+    },
+    {
+      id: 'skill-scope',
+      title: 'skill 只管功能，不管形式',
+      desc: 'skill 规定五个功能点（稳定 id / 表态 / 一行一条 / 可选中 textarea / 相对路径），不规定版式配色结构。这一页的深色技术风就是当场定的，不是模板。'
+    },
+    {
+      id: 'feedback-loop',
+      title: '反馈能快回来',
+      desc: '页面 postMessage 给卡片，卡片给「填入输入框」，而且是<b>追加</b>而不是覆盖你写了一半的草稿。'
+    },
+    {
+      id: 'verify-gap',
+      title: '还没验的那一块',
+      desc: '宿主半区我离线验了 75 项断言，但卡片在真实 GUI 里长什么样只有你能看到。这一项我最想要你的意见。'
+    }
+  ];
+
+  var state = {};
+  for (var i = 0; i < ITEMS.length; i++) state[ITEMS[i].id] = { verdict: '', note: '' };
+
+  var itemsEl = document.getElementById('items');
+  var outEl = document.getElementById('out');
+  var msgEl = document.getElementById('msg');
+  var wordsEl = document.getElementById('words');
+
+  // 判定词表必须显示出来：用户要知道能填什么，agent 要知道收到了什么。
+  wordsEl.innerHTML = WORDS.map(function (w) { return '<span class="w">' + w + '</span>'; }).join('')
+    + '<span class="w">（备注可选，写什么都行）</span>';
+
+  function line(id) {
+    var s = state[id];
+    if (!s || s.verdict === '') return '';
+    return id + ' ' + s.verdict + (s.note ? '：' + s.note : '');
+  }
+
+  function compose() {
+    var lines = [];
+    for (var i = 0; i < ITEMS.length; i++) {
+      var l = line(ITEMS[i].id);
+      if (l) lines.push(l);
+    }
+    return lines.join('\n');
+  }
+
+  function render() {
+    var html = '';
+    for (var i = 0; i < ITEMS.length; i++) {
+      var it = ITEMS[i];
+      var s = state[it.id];
+      var btns = WORDS.map(function (w) {
+        var on = s.verdict === w ? 'true' : 'false';
+        return '<button class="vbtn" data-w="' + w + '" data-id="' + it.id + '" aria-pressed="' + on + '">' + w + '</button>';
+      }).join('');
+      html += '<div class="item" data-v="' + (s.verdict || '') + '" id="card-' + it.id + '">'
+        + '<div class="ihead"><span class="id">' + it.id + '</span><span class="ititle">' + it.title + '</span></div>'
+        + '<div class="idesc">' + it.desc + '</div>'
+        + '<div class="row">' + btns
+        + '<input class="note" data-id="' + it.id + '" placeholder="备注（可选）：哪里要改、想要哪种风格…" value="'
+        + String(s.note).replace(/"/g, '&quot;') + '" />'
+        + '<button class="copy1" data-copy="' + it.id + '">复制这一条</button>'
+        + '</div></div>';
+    }
+    itemsEl.innerHTML = html;
+  }
+
+  function sync() {
+    var text = compose();
+    outEl.value = text;
+    // 顺手实况同步给卡片，用户不用先点"发送"。
+    post(text);
+  }
+
+  function post(text) {
+    if (window.parent === window) return;
+    try {
+      window.parent.postMessage({ type: FEEDBACK_TYPE, text: text }, '*');
+    } catch (e) { /* 父页面不在时忽略 */ }
+  }
+
+  itemsEl.addEventListener('click', function (ev) {
+    var target = ev.target;
+    if (!target || !target.dataset) return;
+    var id = target.dataset.id;
+    if (target.classList.contains('vbtn') && id) {
+      state[id].verdict = state[id].verdict === target.dataset.w ? '' : target.dataset.w;
+      render(); sync();
+      return;
+    }
+    var copyId = target.dataset.copy;
+    if (copyId) {
+      var text = line(copyId);
+      if (text === '') { say('这一项还没表态'); return; }
+      put(text, '已复制 ' + copyId);
+    }
+  });
+
+  itemsEl.addEventListener('input', function (ev) {
+    var target = ev.target;
+    if (!target || !target.classList || !target.classList.contains('note')) return;
+    state[target.dataset.id].note = target.value;
+    sync();
+  });
+
+  function say(text) { msgEl.textContent = text; }
+
+  function put(text, okMessage) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        function () { say(okMessage + ' ✓'); },
+        function () { outEl.focus(); outEl.select(); say('剪贴板被拦，已帮你选中，按 Ctrl+C'); }
+      );
+    } else {
+      outEl.focus(); outEl.select();
+      say('已选中，按 Ctrl+C');
+    }
+  }
+
+  document.getElementById('send').addEventListener('click', function () {
+    var text = compose();
+    if (text === '') { say('还没有任何判定'); return; }
+    post(text);
+    say(window.parent === window
+      ? '不在卡片里，直接选中 ④ 的文本复制即可'
+      : '已交给卡片 ✓ 点卡片上的「填入输入框」');
+  });
+
+  document.getElementById('copy').addEventListener('click', function () {
+    var text = compose();
+    if (text === '') { say('还没有任何判定'); return; }
+    put(text, '已复制全部');
+  });
+
+  document.getElementById('clear').addEventListener('click', function () {
+    for (var i = 0; i < ITEMS.length; i++) state[ITEMS[i].id] = { verdict: '', note: '' };
+    render(); sync(); say('已清空');
+  });
+
+  render();
+  sync();
+})();
+</script>
+</body>
+</html>

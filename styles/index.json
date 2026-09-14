@@ -1,0 +1,47 @@
+{
+  "_comment": "showme-report 的预设样式清单。default 就是那“一行默认值”——改它即可换默认外观。",
+  "default": "soft",
+  "sharedMarkup": "所有预设吃同一套语义标记（.page/.masthead/.section/.card/.grid/.table/.callout/.evidence/.timeline/.kv/.code/.chip/.btn/.stat），所以同一份内容换皮肤不用改标记。",
+  "presets": [
+    {
+      "slug": "soft",
+      "name": "柔和现代",
+      "en": "Soft Modern",
+      "file": "soft.css",
+      "signature": "浅灰底 · 白卡大圆角 · 柔和阴影 · 低对比 · 蓝色点缀",
+      "useFor": "通用汇报、进展同步、方案说明、需要长时间阅读的页面",
+      "avoid": "需要强冲击力的封面、需要审计感的证据页",
+      "mode": "light + dark（跟随系统）"
+    },
+    {
+      "slug": "swiss",
+      "name": "瑞士国际主义",
+      "en": "Swiss / Editorial",
+      "file": "swiss.css",
+      "signature": "白底 · 巨大标题 · 严格网格 · 无圆角 · 极细分割线 · 大留白",
+      "useFor": "编辑部式长文、结论多的分析、需要显得“克制与权威”的汇报",
+      "avoid": "大量并排卡片、需要活跃感的交互页",
+      "mode": "light + dark（跟随系统）"
+    },
+    {
+      "slug": "brutal",
+      "name": "新野兽派",
+      "en": "Neo-Brutalist",
+      "file": "brutal.css",
+      "signature": "黑粗边框 · 硬阴影（无模糊）· 无圆角 · 品红/酸绿 · 等宽正文 · hover 位移",
+      "useFor": "设计评审、多变体挑选、需要强指认感的页面",
+      "avoid": "正式对外交付件、需要冷静克制的场合",
+      "mode": "light"
+    },
+    {
+      "slug": "blueprint",
+      "name": "蓝图 / 工程图",
+      "en": "Blueprint",
+      "file": "blueprint.css",
+      "signature": "深蓝底 + 网格 · 青色线条 · 全等宽 · 虚线框 · 坐标与标注感",
+      "useFor": "架构说明、数据流、时序、流程与依赖关系",
+      "avoid": "图文混排的评审、需要大量正文阅读的页面",
+      "mode": "dark"
+    }
+  ]
+}

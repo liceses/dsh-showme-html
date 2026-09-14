@@ -1,0 +1,48 @@
+{
+  "name": "dsh-showme-html",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DSH 插件：给 agent 一个快捷入口，把工作区里写好的 HTML 页直接展示在对话里（对话内卡片 / 画面内全屏 / 在浏览器打开原文件），并让用户在页面上产生的反馈快速回到 agent 手里。",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ],
+      "platform": "web"
+    }
+  },
+  "files": [
+    "lib",
+    "test",
+    "cordis.patch.yml",
+    "README.md",
+    "skill"
+  ],
+  "scripts": {
+    "test": "node test/route.test.mjs && node test/client-bundle.test.mjs && node test/presets.test.mjs && node test/page-smoke.test.mjs",
+    "test:host": "node test/route.test.mjs",
+    "test:client": "node test/client-bundle.test.mjs",
+    "test:presets": "node test/presets.test.mjs",
+    "test:page": "node test/page-smoke.test.mjs",
+    "probe": "node test/live-probe.mjs"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "cordis",
+    "html",
+    "report"
+  ],
+  "license": "MIT"
+}

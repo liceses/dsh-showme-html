@@ -1,0 +1,16 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# DSH 运行时工作区：会话产物、预设落地副本、反馈信箱都在这里，
+# 属于本机运行痕迹，不进仓库（示例页源码见 examples/）。
+.dsh/
+
+# 构建产物
+dist/
+*.tgz
+
+# 日志与临时
+*.log
+.DS_Store
+Thumbs.db

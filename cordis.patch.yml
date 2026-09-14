@@ -1,0 +1,11 @@
+# dsh-showme-html bundle patch
+#
+# 声明在 package.json 的 dsh.bundle.patch；把本包列进
+# ~/.dsh/profiles/<profile>/package.json 的 dsh.profile.bundles 之后，
+# 这一行会被自动并入该 profile 的插件层栈。
+#
+# 浏览器半区（lib/client.js）由 client-modules 依据 package.json 的
+# dsh.client 声明自动发现并挂在 /plugins/dsh-showme-html/client.js，无需在此声明。
+- insert:
+    - id: showme-html
+      name: dsh-showme-html

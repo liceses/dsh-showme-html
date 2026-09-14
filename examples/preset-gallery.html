@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>showme-report · 预设样式画廊</title>
+<!-- 皮肤：换的就是这一个 <link>。四套预设吃同一套语义标记，所以标记一个字都不用改。 -->
+<link id="skin" rel="stylesheet" href="presets/soft.css" />
+<style>
+  /* 下面全部只用预设自己的令牌，所以控制条会跟着皮肤一起变 */
+  .skinbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 12px max(20px, calc((100% - var(--measure, 1000px)) / 2));
+    background: var(--paper); border-bottom: 1px solid var(--line);
+  }
+  .skinbar .lbl { font-family: var(--mono, monospace); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .skinbar .now { margin-left: auto; font-family: var(--mono, monospace); font-size: 12px; color: var(--muted); }
+  .skinbar .now b { color: var(--accent); }
+  .picked { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .skincard { position: relative; }
+  .skincard .slug { font-family: var(--mono, monospace); font-size: 11px; letter-spacing: .08em; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="skinbar">
+  <span class="lbl">预设</span>
+  <button class="btn" data-skin="soft">柔和现代</button>
+  <button class="btn" data-skin="swiss">瑞士国际主义</button>
+  <button class="btn" data-skin="brutal">新野兽派</button>
+  <button class="btn" data-skin="blueprint">蓝图</button>
+  <span class="now" id="now">当前：<b>—</b></span>
+</div>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="kicker">SHOWME-REPORT · PRESET GALLERY</div>
+    <h1>四套预设，同一份内容</h1>
+    <p class="lead">点上面的按钮换皮肤——<b>标记一个字都不用改</b>。预设就是「同一份内容上的四张皮」：AI 负责写语义标记，你负责挑视觉语言。快捷键 <code>1</code>–<code>4</code>。</p>
+    <div class="meta">
+      <span>4 套预设</span><span>共用语义标记</span><span>零外部依赖</span><span>无 CDN / 无构建</span>
+    </div>
+  </header>
+
+  <section class="section">
+    <h2>为什么值得做预设 <small>AI 写页面「廉价感」的根源，通常不在配色</small></h2>
+    <div class="cols">
+      <div class="card">
+        <h3>字号没有刻度</h3>
+        <p>标题和正文差不多大，层级就塌了。四套皮肤之间差异最大的就是这条——<b>尺度跨度</b>。</p>
+      </div>
+      <div class="card">
+        <h3>间距没有节奏</h3>
+        <p>该松的地方挤、该紧的地方散。预设把间距做成令牌，段落之间自然有呼吸。</p>
+      </div>
+      <div class="card">
+        <h3>颜色没有节制</h3>
+        <p>五颜六色，但没有一处是在强调。瑞士那套几乎没有颜色，注意力全靠版面撑。</p>
+      </div>
+    </div>
+    <div class="callout">
+      <span class="label">结论</span>
+      预设最值钱的部分不是配色，是<b>字号刻度与间距节奏</b>。所以每套皮肤都把它俩做成令牌，而不是散落在各处。
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>同一张表，四种读法 <small>表格是最能看出皮肤差异的地方</small></h2>
+    <table class="table">
+      <thead>
+        <tr><th>预设</th><th>签名</th><th>适合</th><th class="num">CSS 行数</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>柔和现代 <span class="slug">soft</span></td><td>浅灰底 · 白卡大圆角 · 柔和阴影 · 低对比</td><td>通用汇报、进展同步、长文阅读</td><td class="num">186</td></tr>
+        <tr><td>瑞士国际主义 <span class="slug">swiss</span></td><td>白底 · 巨大标题 · 严格网格 · 无圆角 · 大留白</td><td>编辑部长文、结论多的分析</td><td class="num">178</td></tr>
+        <tr><td>新野兽派 <span class="slug">brutal</span></td><td>黑粗边框 · 硬阴影 · 无圆角 · 强对比 · hover 位移</td><td>设计评审、多变体挑选</td><td class="num">196</td></tr>
+        <tr><td>蓝图 <span class="slug">blueprint</span></td><td>深蓝底 + 网格 · 青色线条 · 全等宽 · 虚线框</td><td>架构、数据流、时序、依赖</td><td class="num">188</td></tr>
+      </tbody>
+    </table>
+    <div class="stat"><b class="num">4</b><span>套预设 · 共用一套语义标记 · 换皮肤不用改标记</span></div>
+  </section>
+
+  <section class="section">
+    <h2>证据与事件 <small>图、结论、时间线</small></h2>
+    <figure class="evidence">
+      <img src="assets/arch.svg" alt="showmeWithHTML 数据流" />
+      <figcaption>图 1 · showmeWithHTML 的数据流 —— 这张图是相对路径引用的，能显示就说明镜像路由在工作</figcaption>
+    </figure>
+    <ol class="timeline">
+      <li><b>agent 写标记</b>按共用语义标记写一页 HTML，把要说的事按 section / card / table 组织好。</li>
+      <li><b>挑一套皮肤</b>按内容类型从四套里选一套，页面里只多一行 <code>&lt;link&gt;</code>。</li>
+      <li><b>宿主服务资源</b>页面里的相对引用（图片、预设 CSS）由镜像路由按工作区目录结构分发。</li>
+      <li><b>你换皮肤</b>改一个文件名就换一整套视觉语言——内容与标记完全不动。</li>
+    </ol>
+  </section>
+
+  <section class="section">
+    <h2>最后一块拼图 <small>键值、代码、标签、按钮</small></h2>
+    <dl class="kv">
+      <dt>预设目录</dt><dd><code>.dsh/showme/presets/</code>（宿主首次展示时自动落地，create-only）</dd>
+      <dt>引用方式</dt><dd><code>&lt;link rel="stylesheet" href="presets/swiss.css"&gt;</code></dd>
+      <dt>默认值</dt><dd><code>presets/index.json</code> 里的 <code>default</code> —— 一行就能改</dd>
+      <dt>自包含</dt><dd>无 @import、无外链字体、无 <code>url()</code>；断网也完整</dd>
+    </dl>
+    <pre class="code"><code>&lt;!-- 换皮肤就是改这一行 --&gt;
+&lt;link rel="stylesheet" href="presets/<b>brutal</b>.css"&gt;
+
+&lt;!-- 内容用同一套语义标记，与皮肤无关 --&gt;
+&lt;div class="page"&gt;
+  &lt;header class="masthead"&gt;&lt;div class="kicker"&gt;…&lt;/div&gt;&lt;h1&gt;…&lt;/h1&gt;&lt;/header&gt;
+  &lt;section class="section"&gt;
+    &lt;h2&gt;…&lt;/h2&gt;
+    &lt;div class="cols"&gt;&lt;div class="card"&gt;…&lt;/div&gt;&lt;/div&gt;
+    &lt;table class="table"&gt;…&lt;/table&gt;
+    &lt;div class="callout"&gt;…&lt;/div&gt;
+  &lt;/section&gt;
+&lt;/div&gt;</code></pre>
+    <div class="chips">
+      <span class="chip">.page</span><span class="chip">.masthead</span><span class="chip">.section</span>
+      <span class="chip">.card</span><span class="chip">.cols</span><span class="chip">.table</span>
+      <span class="chip accent">.callout</span><span class="chip">.evidence</span><span class="chip">.timeline</span>
+      <span class="chip">.kv</span><span class="chip">.code</span><span class="chip">.chip</span><span class="chip">.btn</span>
+    </div>
+    <p>
+      <button class="btn">普通按钮</button>
+      <button class="btn primary">强调按钮</button>
+      <a href="review.html">上一张展示页</a>
+    </p>
+  </section>
+
+  <section class="section">
+    <h2>挑一套当默认 <small>点下面任意一套，页面会把你的选择组成一行文本交给 AI</small></h2>
+    <div class="cols two" id="picker"></div>
+    <div class="callout">
+      <span class="label">回执</span>
+      <textarea id="out" readonly style="width:100%;min-height:52px;margin-top:8px;font-family:var(--mono,monospace);font-size:13px;padding:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)"></textarea>
+      <div style="margin-top:8px">
+        <button class="btn primary" id="send">发送这个选择</button>
+        <button class="btn" id="clear">清空</button>
+        <span class="muted" id="msg"></span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var FEEDBACK_TYPE = 'dsh-showme-feedback';
+
+  var PRESETS = [
+    { slug: 'soft',      name: '柔和现代',     file: 'presets/soft.css',
+      sig: '浅灰底 · 白卡大圆角 · 柔和阴影 · 低对比 · 蓝色点缀',
+      use: '通用汇报、进展同步、方案说明、长时间阅读' },
+    { slug: 'swiss',     name: '瑞士国际主义', file: 'presets/swiss.css',
+      sig: '白底 · 巨大标题 · 严格网格 · 无圆角 · 极细分割线 · 大留白',
+      use: '编辑部式长文、结论多的分析、需要权威感' },
+    { slug: 'brutal',    name: '新野兽派',     file: 'presets/brutal.css',
+      sig: '黑粗边框 · 硬阴影（零模糊）· 无圆角 · 品红酸绿 · 等宽正文',
+      use: '设计评审、多变体挑选、需要强指认感' },
+    { slug: 'blueprint', name: '蓝图 / 工程图', file: 'presets/blueprint.css',
+      sig: '深蓝底 + 网格 · 青色线条 · 全等宽 · 虚线框 · 标注感',
+      use: '架构说明、数据流、时序、流程与依赖' }
+  ];
+
+  var skin = document.getElementById('skin');
+  var nowEl = document.getElementById('now');
+  var pickerEl = document.getElementById('picker');
+  var outEl = document.getElementById('out');
+  var msgEl = document.getElementById('msg');
+  var picked = '';
+
+  var byslug = {};
+  PRESETS.forEach(function (p) { byslug[p.slug] = p; });
+
+  // ── 皮肤切换 ──────────────────────────────────────────────────────────
+  function apply(slug) {
+    var p = byslug[slug];
+    if (!p) return;
+    skin.setAttribute('href', p.file);
+    nowEl.innerHTML = '当前：<b>' + p.name + '</b> <span class="slug">' + p.slug + '</span>';
+    var buttons = document.querySelectorAll('.skinbar [data-skin]');
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].classList.toggle('picked', buttons[i].getAttribute('data-skin') === slug);
+    }
+  }
+
+  document.querySelector('.skinbar').addEventListener('click', function (ev) {
+    var slug = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-skin');
+    if (slug) apply(slug);
+  });
+
+  document.addEventListener('keydown', function (ev) {
+    var index = parseInt(ev.key, 10);
+    if (index >= 1 && index <= PRESETS.length && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
+      var tag = (ev.target && ev.target.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      apply(PRESETS[index - 1].slug);
+    }
+  });
+
+  // ── 选择回执（用的就是 skill 里那条「一行一条」格式） ────────────────
+  function compose() {
+    return picked === '' ? '' : 'preset-' + picked + ' 用这个：' + byslug[picked].name + '（' + picked + '）';
+  }
+
+  function sync() {
+    var text = compose();
+    outEl.value = text;
+    if (window.parent !== window) {
+      try { window.parent.postMessage({ type: FEEDBACK_TYPE, text: text }, '*'); } catch (e) {}
+    }
+  }
+
+  function card(p) {
+    var el = document.createElement('div');
+    el.className = 'card skincard' + (picked === p.slug ? ' picked' : '');
+    el.innerHTML =
+      '<h3>' + p.name + '</h3>' +
+      '<div class="slug">preset-' + p.slug + '</div>' +
+      '<p>' + p.sig + '</p>' +
+      '<p class="muted">适合：' + p.use + '</p>' +
+      '<p><button class="btn" data-pick="' + p.slug + '">看这套</button> ' +
+      '<button class="btn primary" data-default="' + p.slug + '">设为默认</button></p>';
+    return el;
+  }
+
+  function renderPicker() {
+    pickerEl.innerHTML = '';
+    PRESETS.forEach(function (p) { pickerEl.appendChild(card(p)); });
+  }
+
+  pickerEl.addEventListener('click', function (ev) {
+    var el = ev.target;
+    if (!el || !el.getAttribute) return;
+    var look = el.getAttribute('data-pick');
+    var setAsDefault = el.getAttribute('data-default');
+    if (look) { apply(look); return; }
+    if (setAsDefault) {
+      picked = setAsDefault;
+      renderPicker();
+      msgEl.textContent = '已选 ' + byslug[picked].name + '，点「发送这个选择」交给 AI';
+      sync();
+    }
+  });
+
+  document.getElementById('send').addEventListener('click', function () {
+    if (picked === '') { msgEl.textContent = '先选一套'; return; }
+    sync();
+    msgEl.textContent = window.parent === window ? '不在卡片里，直接复制上面那行文本' : '已交给卡片 ✓';
+  });
+
+  document.getElementById('clear').addEventListener('click', function () {
+    picked = ''; renderPicker(); sync(); msgEl.textContent = '已清空';
+  });
+
+  renderPicker();
+  apply('soft');
+  sync();
+})();
+</script>
+</body>
+</html>

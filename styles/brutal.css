@@ -1,0 +1,192 @@
+/* ============================================================================
+   showme-report preset · brutal —— 新野兽派 (Neo-Brutalist)
+   ----------------------------------------------------------------------------
+   定位：让页面"有指认感"——每一块都像可以拿起来的东西。
+   签名：黑粗边框 · 硬阴影（零模糊）· 无圆角 · 品红/酸绿 · 等宽正文 · hover 位移
+   适用：设计评审、多变体挑选、需要强指认感的页面
+   避免：正式对外交付件、需要冷静克制的场合
+
+   规则来源：StyleKit 的 neo-brutalist 约束（去掉了它自己 globalCss 里
+   与 dontList 相矛盾的渐变与 backdrop-filter）。
+   吃的是共用语义标记——换皮肤不用改标记。
+   自包含：无 @import、无外链字体、无 url()。
+   ========================================================================= */
+
+/* ── 设计令牌 ───────────────────────────────────────────────────────────── */
+:root {
+  --paper: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f5f5f5;
+  --ink: #0a0a0a;
+  --ink-2: #1f1f1f;
+  --muted: #5c5c5c;
+  --line: #d9d9d9;
+  --accent: #ff006e;
+
+  /* 野兽派的三条铁律，全部做成令牌，改一处即全局一致 */
+  --bw: 4px;                       /* 边框永远纯黑 + 够粗 */
+  --bd: var(--bw) solid var(--ink);
+  --hard: 8px 8px 0 0 var(--ink);  /* 阴影永远硬边、零模糊 */
+  --hard-lg: 12px 12px 0 0 var(--ink);
+  --hard-accent: 12px 12px 0 0 #ff006e;
+  --r: 0; --r-sm: 0; --r-pill: 0;  /* 无圆角 */
+
+  --mag: #ff006e;
+  --acid: #ccff00;
+  --cyan: #00d9ff;
+  --orange: #ff9500;
+  --yellow: #ffff00;
+
+  --f-hero: clamp(30px, 5.4vw, 54px);
+  --f-h2: clamp(20px, 2.6vw, 28px);
+  --f-h3: 17px;
+  --f-body: 15px;
+  --f-sm: 13.5px;
+  --f-xs: 11.5px;
+  --lh: 1.72;
+
+  --s1: 6px; --s2: 12px; --s3: 18px; --s4: 28px; --s5: 44px; --s6: 72px;
+  --measure: 1020px;
+
+  --font: "Arial Black", "Arial Bold", Arial, "Microsoft YaHei", sans-serif;
+  --mono: Consolas, "Cascadia Mono", ui-monospace, Menlo, monospace;
+  --body: var(--mono);
+}
+
+/* ── 基底 ───────────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: var(--f-body)/var(--lh) var(--body);
+}
+.page { max-width: var(--measure); margin: 0 auto; padding: var(--s6) var(--s4) 110px; }
+p { margin: 0 0 var(--s3); }
+a { color: var(--ink); text-decoration: none; border-bottom: var(--bw) solid var(--mag); font-weight: 700; }
+a:hover { background: var(--yellow); }
+b, strong { font-weight: 700; }
+code { font-family: var(--mono); font-size: .92em; background: var(--acid); border: 2px solid var(--ink); padding: 0 4px; }
+.muted { color: var(--muted); }
+.mark { background: var(--yellow); border: 2px solid var(--ink); padding: 0 5px; font-weight: 700; }
+.rule { border: 0; border-top: var(--bw) solid var(--ink); margin: var(--s5) 0; }
+
+/* ── 报头 ───────────────────────────────────────────────────────────────── */
+.masthead { border: var(--bd); box-shadow: var(--hard); background: var(--surface); padding: var(--s4); margin-bottom: var(--s5); }
+.kicker {
+  display: inline-block; font: 700 var(--f-xs)/1 var(--mono); letter-spacing: .18em; text-transform: uppercase;
+  background: var(--ink); color: var(--paper); padding: 5px 10px; margin-bottom: var(--s3);
+}
+.masthead h1 {
+  font-family: var(--font); font-size: var(--f-hero); line-height: 1.06; letter-spacing: -.02em;
+  font-weight: 900; margin: 0 0 var(--s3);
+}
+.lead { font-size: var(--f-body); color: var(--ink-2); margin: 0 0 var(--s3); }
+.meta { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); font: var(--f-xs)/1.6 var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+
+/* ── 小节 ───────────────────────────────────────────────────────────────── */
+.section { margin-top: var(--s6); }
+.section > h2 {
+  font-family: var(--font); font-size: var(--f-h2); line-height: 1.2; font-weight: 900;
+  margin: 0 0 var(--s4); padding: var(--s1) 0 var(--s1) var(--s2); border-left: 12px solid var(--mag);
+}
+.section > h2 small { display: block; font: 400 var(--f-sm)/1.6 var(--mono); color: var(--muted); margin-top: 4px; }
+h3 { font-family: var(--font); font-size: var(--f-h3); font-weight: 900; margin: var(--s4) 0 var(--s2); }
+
+/* ── 卡片与网格 ─────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface); border: var(--bd); box-shadow: var(--hard);
+  padding: var(--s4); transition: transform .15s ease-out, box-shadow .15s ease-out, background-color .15s ease-out;
+}
+.card > :last-child { margin-bottom: 0; }
+.card:hover { transform: translate(-2px, -2px); box-shadow: var(--hard-accent); }
+.card.acid { background: var(--acid); }
+.card.ink { background: var(--ink); color: var(--paper); }
+.card.ink .muted, .card.ink .chip { color: #cfcfcf; }
+.cols { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); margin: var(--s4) 0; }
+.cols.two { grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); }
+
+.stat { display: flex; align-items: baseline; gap: var(--s2); }
+.stat .num {
+  font-family: var(--font); font-size: 38px; font-weight: 900; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums; background: var(--acid); border: var(--bd); padding: 0 8px;
+}
+.stat span { font: var(--f-xs)/1.6 var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+
+/* ── 标签 ───────────────────────────────────────────────────────────────── */
+.chips { display: flex; flex-wrap: wrap; gap: var(--s2); margin: var(--s2) 0 var(--s3); }
+.chip {
+  font: 700 var(--f-xs)/1 var(--mono); letter-spacing: .06em; text-transform: uppercase;
+  background: var(--surface); border: 3px solid var(--ink); padding: 4px 8px; white-space: nowrap;
+}
+.chip.accent { background: var(--mag); color: #fff; }
+.chip.acid { background: var(--acid); }
+
+/* ── 按钮 ───────────────────────────────────────────────────────────────── */
+/* Physical Crushing：active 位移必须等于原阴影像素值，才叫"压平" */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  font: 900 var(--f-sm)/1 var(--font); letter-spacing: .02em;
+  color: #fff; background: var(--mag); border: var(--bd); border-radius: 0;
+  padding: 12px 20px; box-shadow: 6px 6px 0 0 var(--ink);
+  transition: transform .15s ease-out, box-shadow .15s ease-out, background-color .15s ease-out;
+}
+.btn:hover { transform: translate(-2px, -2px); box-shadow: 10px 10px 0 0 var(--ink); background: var(--cyan); color: var(--ink); }
+.btn:active { transform: translate(6px, 6px); box-shadow: none; }
+.btn.primary { background: var(--ink); color: var(--paper); }
+.btn.primary:hover { background: var(--acid); color: var(--ink); }
+
+/* ── 表格 ───────────────────────────────────────────────────────────────── */
+.table { width: 100%; border-collapse: collapse; font: var(--f-sm)/1.6 var(--mono); margin: var(--s3) 0; border: var(--bd); background: var(--surface); }
+.table th, .table td { text-align: left; padding: 10px 12px; border: 2px solid var(--ink); vertical-align: top; }
+.table thead th {
+  font: 700 var(--f-xs)/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+  background: var(--ink); color: var(--paper);
+}
+.table tbody tr:nth-child(even) td { background: var(--surface-2); }
+.table td.num { font-variant-numeric: tabular-nums; }
+
+/* ── 结论条 ─────────────────────────────────────────────────────────────── */
+.callout {
+  border: var(--bd); box-shadow: var(--hard); background: var(--mag); color: #fff;
+  padding: var(--s3) var(--s4); margin: var(--s4) 0; font-weight: 700;
+}
+.callout > :last-child { margin-bottom: 0; }
+.callout .label {
+  display: inline-block; font: 700 var(--f-xs)/1 var(--mono); letter-spacing: .18em; text-transform: uppercase;
+  background: var(--ink); color: var(--paper); padding: 3px 8px; margin-bottom: var(--s2);
+}
+.callout.good { background: var(--acid); color: var(--ink); }
+.callout.warn { background: var(--orange); color: var(--ink); }
+.callout.bad { background: var(--mag); color: #fff; }
+
+/* ── 证据图 ─────────────────────────────────────────────────────────────── */
+.evidence { margin: var(--s4) 0; }
+.evidence img { display: block; width: 100%; height: auto; border: var(--bd); box-shadow: var(--hard); background: var(--surface-2); }
+.evidence figcaption { font: var(--f-xs)/1.6 var(--mono); text-transform: uppercase; letter-spacing: .08em; margin-top: var(--s2); color: var(--muted); }
+
+/* ── 时间线 ─────────────────────────────────────────────────────────────── */
+.timeline { list-style: none; margin: var(--s4) 0; padding: 0; counter-reset: t; }
+.timeline li {
+  counter-increment: t; position: relative; padding: 0 0 var(--s2) var(--s5); margin-bottom: var(--s2);
+  font: var(--f-sm)/1.7 var(--mono); border-bottom: 2px solid var(--ink);
+}
+.timeline li:last-child { border-bottom: 0; }
+.timeline li::before {
+  content: counter(t, decimal-leading-zero); position: absolute; left: 0; top: 0;
+  font: 900 var(--f-xs)/1 var(--mono); background: var(--acid); border: 3px solid var(--ink); padding: 3px 5px;
+}
+.timeline li b { display: block; font-family: var(--font); font-size: var(--f-body); font-weight: 900; margin-bottom: 2px; }
+
+/* ── 键值表 ─────────────────────────────────────────────────────────────── */
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 0; margin: var(--s3) 0; border: var(--bd); font: var(--f-sm)/1.6 var(--mono); }
+.kv dt, .kv dd { padding: 9px 12px; border-bottom: 2px solid var(--ink); }
+.kv dt { background: var(--ink); color: var(--paper); font-weight: 700; }
+.kv dd { margin: 0; }
+.kv dt:last-of-type, .kv dd:last-of-type { border-bottom: 0; }
+
+/* ── 代码 ───────────────────────────────────────────────────────────────── */
+.code {
+  margin: var(--s3) 0; padding: var(--s3); overflow: auto;
+  background: var(--ink); color: var(--acid); border: var(--bd); box-shadow: var(--hard);
+  font: 13px/1.7 var(--mono); tab-size: 2;
+}
+.code code { background: none; border: 0; padding: 0; font-size: inherit; color: inherit; }
