@@ -10,9 +10,30 @@
 
 import assert from 'node:assert/strict'
 import { request as httpRequest, createServer } from 'node:http'
+import { existsSync } from 'node:fs'
 import { mkdtemp, mkdir, readFile, readdir, symlink, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { tmpdir, homedir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+
+/**
+ * 找到本机 DSH 装的 `@deepseek-ai/dsh-tools`，用来借它的 JSON Schema 校验器。
+ *
+ * 找不到就返回 null（调用方跳过那几条断言）：**那不是本插件的代码**，
+ * 不该因为别人机器上的 DSH 装在别处就让整个测试挂掉。
+ * @returns 模块命名空间，或 null。
+ */
+async function loadHarnessTools() {
+  const roots = [
+    process.env.DSH_HOME === undefined ? null : join(process.env.DSH_HOME, 'profiles', 'node_modules'),
+    join(homedir(), '.dsh', 'profiles', 'node_modules'),
+  ].filter((root) => root !== null)
+  for (const root of roots) {
+    const entry = join(root, '@deepseek-ai', 'dsh-tools', 'lib', 'index.js')
+    if (existsSync(entry)) return import(pathToFileURL(entry).href)
+  }
+  return null
+}
 
 import { apply } from '../lib/index.js'
 
@@ -315,19 +336,26 @@ check('presentationMeta 带上 bytes 与宿主算好的 url', () =>
 // `register()` 只校验 output.schema，parameters 是原样交给模型适配器的
 // （ToolSchema.parameters 就是一份 JSON Schema）。这里两条都验，避免手写
 // schema 在请求期才炸。
-const toolsPkg = await import('file:///C:/Users/ROG/.dsh/profiles/node_modules/@deepseek-ai/dsh-tools/lib/index.js')
-check('output.schema 受支持', () => toolsPkg.assertSupportedJsonSchema(tool.output.schema))
-check('parameters 受支持', () => toolsPkg.assertSupportedJsonSchema(tool.parameters))
-check('parameters 是合法对象根', () => toolsPkg.assertObjectJsonSchema(tool.parameters))
-check('手写 parameters 与 defineTool 的编译结果同形', () => {
-  const compiled = toolsPkg.parameterSchemaSpecToJsonSchema({
-    path: { type: 'string', required: true },
-    title: { type: 'string' },
+//
+// 用的是**本机 DSH 装的那份真包**，所以路径必须现算——写死成某个用户目录的话，
+// 别人克隆下来这几条就会挂（而且会把本机路径带进公开仓库）。
+const toolsPkg = await loadHarnessTools()
+if (toolsPkg === null) {
+  console.log('  skip @deepseek-ai/dsh-tools 不在本机 —— schema 校验器那 4 条跳过')
+} else {
+  check('output.schema 受支持', () => toolsPkg.assertSupportedJsonSchema(tool.output.schema))
+  check('parameters 受支持', () => toolsPkg.assertSupportedJsonSchema(tool.parameters))
+  check('parameters 是合法对象根', () => toolsPkg.assertObjectJsonSchema(tool.parameters))
+  check('手写 parameters 与 defineTool 的编译结果同形', () => {
+    const compiled = toolsPkg.parameterSchemaSpecToJsonSchema({
+      path: { type: 'string', required: true },
+      title: { type: 'string' },
+    })
+    assert.equal(compiled.type, 'object')
+    assert.deepEqual(compiled.required, ['path'])
+    assert.equal(compiled.properties.path.type, 'string')
   })
-  assert.equal(compiled.type, 'object')
-  assert.deepEqual(compiled.required, ['path'])
-  assert.equal(compiled.properties.path.type, 'string')
-})
+}
 
 const exec = { agent: { session: { header: { cwd: workspace } } } }
 
