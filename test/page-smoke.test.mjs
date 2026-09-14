@@ -13,19 +13,37 @@
  */
 
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { readdir, readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import vm from 'node:vm'
 
 const here = dirname(fileURLToPath(import.meta.url))
+const stylesDir = join(here, '..', 'styles')
 // 示例页源码放在 examples/（进仓库）；运行时的展示副本在 .dsh/showme/（不进仓库，
 // 否则克隆下来 npm test 会因为缺文件而挂）。
+//
+// 两个目录都扫：examples/ 里的优先（那是进仓库的版本），
+// 但**新写还没同步进 examples/ 的页面也会被覆盖到**，不用记得手动拷。
 const examplesDir = join(here, '..', 'examples')
+const runtimeDir = join(here, '..', '.dsh', 'showme')
 
-const targets = process.argv.length > 2
-  ? process.argv.slice(2)
-  : [join(examplesDir, 'review.html'), join(examplesDir, 'preset-gallery.html')]
+/** 收集 .html 页面，按文件名去重、examples/ 优先。 */
+async function collectPages() {
+  const byName = new Map()
+  const scan = async (dir, prefix) => {
+    for (const name of await readdir(dir).catch(() => [])) {
+      if (name.endsWith('.html')) byName.set(name, join(dir, name))
+    }
+    return prefix
+  }
+  await scan(runtimeDir)
+  await scan(examplesDir) // 后扫覆盖先扫 → examples/ 优先
+  return [...byName.values()].sort()
+}
+
+const targets = process.argv.length > 2 ? process.argv.slice(2) : await collectPages()
 
 let checks = 0
 /**
@@ -133,13 +151,27 @@ for (const target of targets) {
       for (const id of unique) assert.match(items.innerHTML, new RegExp(`class="id">${id}<`))
     })
 
-    check('页面列出了判定词表', () => assert.ok(elements.get('words').innerHTML.includes('class="w"')))
+    // skill 的契约是「页面必须把本页用到的判定词列出来」——不是某个固定 class 名。
+    // 所以从条目上解析出实际用到的词，再要求词表里都有。
+    const verdicts = [...new Set([...items.innerHTML.matchAll(/data-w="([^"]+)"/g)].map((m) => m[1]))]
+    check('页面把用到的判定词都列了出来（skill 契约）', () => {
+      assert.ok(verdicts.length >= 2, `只解析到 ${verdicts.length} 个判定词`)
+      const words = elements.get('words').innerHTML
+      for (const word of verdicts) assert.ok(words.includes(word), `词表里没有「${word}」`)
+    })
     check('汇总区是可选中复制的 textarea', () => assert.match(html, /<textarea[^>]*id="out"[^>]*readonly/))
 
     check('点击判定后汇总文本会变', () => {
       const firstId = unique[0]
+      // 假目标同时提供 dataset / getAttribute / className：
+      // 页面用哪种写法读属性都行，测试不该规定实现。
       items.handlers.click({
-        target: { dataset: { id: firstId, w: '同意' }, classList: { contains: (n) => n === 'vbtn' } },
+        target: {
+          dataset: { id: firstId, w: '同意' },
+          className: 'vbtn',
+          getAttribute: (name) => (name === 'data-id' ? firstId : name === 'data-w' ? '同意' : null),
+          classList: { contains: (n) => n === 'vbtn' },
+        },
       })
       const out = elements.get('out').value
       assert.ok(out.includes(firstId), `汇总里没有 ${firstId}`)
@@ -163,28 +195,38 @@ for (const target of targets) {
     check('通过一个 <link id="skin"> 加载预设', () =>
       assert.match(html, /<link id="skin"[^>]*href="presets\/[\w-]+\.css"/),
     )
-    check('四套预设都出现在页面里', () => {
-      for (const slug of ['soft', 'swiss', 'brutal', 'blueprint']) {
-        assert.ok(html.includes(`presets/${slug}.css`), `页面里没有 ${slug}`)
+    // 契约：页面能切到的每个预设都必须真实存在。**不规定**页面是把 href 写死在
+    // HTML 里还是在 JS 里拼——两种写法都从 HTML 与脚本里一起抓。
+    check('能切到的预设都真实存在于 styles/', () => {
+      const refs = new Set()
+      for (const m of html.matchAll(/presets\/([\w-]+)\.css/g)) refs.add(m[1])
+      for (const m of script.matchAll(/slug:\s*'([\w-]+)'/g)) refs.add(m[1])
+      for (const m of html.matchAll(/data-skin="([\w-]+)"/g)) refs.add(m[1])
+      assert.ok(refs.size >= 2, `只找到 ${refs.size} 个预设引用`)
+      for (const slug of refs) {
+        assert.ok(existsSync(join(stylesDir, `${slug}.css`)), `presets/${slug}.css 不存在`)
       }
     })
-    check('切换皮肤只改 href（标记不动）', () => assert.ok(/setAttribute\('href'/.test(script)))
-    check('提供键盘 1–4 快捷键', () => assert.ok(/keydown/.test(script)))
+    // 以上是所有"带皮肤切换"的页面都该满足的；下面几条只有"预览器"形态才有
+    // （promo 那种页面只把皮肤当演示开关，没有可选的卡片列表）。
+    if (elements.has('picker')) {
+      check('提供键盘 1–4 快捷键', () => assert.ok(/keydown/.test(script)))
 
-    const picker = elements.get('picker')
-    check('渲染出四张可选卡片', () => assert.equal(picker.children.length, 4))
+      const picker = elements.get('picker')
+      check('渲染出四张可选卡片', () => assert.equal(picker.children.length, 4))
 
-    check('选中后组句符合 skill 的一行一条格式', () => {
-      picker.handlers.click({ target: { getAttribute: (n) => (n === 'data-default' ? 'brutal' : null) } })
-      assert.match(elements.get('out').value, /^preset-brutal 用这个：/)
-    })
+      check('选中后组句符合 skill 的一行一条格式', () => {
+        picker.handlers.click({ target: { getAttribute: (n) => (n === 'data-default' ? 'brutal' : null) } })
+        assert.match(elements.get('out').value, /^preset-brutal 用这个：/)
+      })
 
-    check('选择同样 postMessage 给父页面', () => {
-      const last = messages[messages.length - 1]
-      assert.ok(last !== undefined, '一次 postMessage 都没发')
-      assert.equal(last.type, 'dsh-showme-feedback')
-      assert.match(last.text, /^preset-brutal /)
-    })
+      check('选择同样 postMessage 给父页面', () => {
+        const last = messages[messages.length - 1]
+        assert.ok(last !== undefined, '一次 postMessage 都没发')
+        assert.equal(last.type, 'dsh-showme-feedback')
+        assert.match(last.text, /^preset-brutal /)
+      })
+    }
   }
 
   check('引用真实产物用的是相对路径', () => {

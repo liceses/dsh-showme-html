@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>showme-report · 让 agent 把成果摊开给你看</title>
+<link id="skin" rel="stylesheet" href="presets/swiss.css" />
+<style>
+  /* 页面专有的控件样式。刻意只用预设的令牌，所以换皮肤时会跟着一起变。 */
+  .skinrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 0; border-bottom: 1px solid var(--line); margin-bottom: var(--s5); }
+  .skinrow .lbl { font-family: var(--mono); font-size: var(--f-xs); letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+  .skinrow .now { margin-left: auto; font-family: var(--mono); font-size: var(--f-xs); color: var(--muted); }
+  .skinrow .now b { color: var(--accent); }
+  .skinrow .btn.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .skinrow .btn { padding: 8px 12px; }
+
+  .item { display: flex; flex-direction: column; gap: var(--s2); }
+  .item .id { font-family: var(--mono); font-size: var(--f-xs); color: var(--accent); letter-spacing: .08em; }
+  .item .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+  .vbtn { cursor: pointer; font: 400 var(--f-xs)/1 var(--font); padding: 7px 11px; border: 1px solid var(--line); background: none; color: var(--ink-2); }
+  .vbtn:hover { border-color: var(--ink); color: var(--ink); }
+  .vbtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .vbtn[aria-pressed="true"][data-w="没遇到"] { background: var(--muted); border-color: var(--muted); }
+  .note { flex: 1; min-width: 140px; font: 400 var(--f-xs)/1.5 var(--font); padding: 6px 9px; border: 1px solid var(--line); background: none; color: var(--ink); }
+  .note:focus { outline: none; border-color: var(--ink); }
+  .item.done { border-left-color: var(--accent); }
+  .item.done .id::after { content: " ✓"; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="skinrow">
+    <span class="lbl">皮肤</span>
+    <button class="btn" data-skin="swiss">瑞士国际主义</button>
+    <button class="btn" data-skin="soft">柔和现代</button>
+    <button class="btn" data-skin="brutal">新野兽派</button>
+    <button class="btn" data-skin="blueprint">蓝图</button>
+    <span class="now" id="now"></span>
+  </div>
+
+  <header class="masthead">
+    <div class="kicker">SHOWME-REPORT</div>
+    <h1>让 agent 把成果摊开给你看</h1>
+    <p class="lead">
+      长篇 Markdown 里没有「指认」，也没有「并排」。这个插件给 agent 一个<strong>展示动作</strong>，
+      给每样东西一个<strong>名字</strong>，把「我要这个」从一句描述变成一次点击。
+    </p>
+    <div class="meta">
+      <span>四套预设</span><span>零依赖 · 零构建</span><span>169 项离线断言</span><span>不开新服务</span>
+    </div>
+  </header>
+
+  <section class="section">
+    <h2>四个痛点 <small>下面每一条都能表态 —— 这页本身就是那个演示</small></h2>
+    <p class="muted">
+      点判定、写备注，③ 会自动把它组织成一行一条的文本。编号 <code>pain-*</code> 就是你可以直接引用的名字。
+    </p>
+    <div class="cols two" id="items"></div>
+  </section>
+
+  <section class="section">
+    <h2>一次完整回路 <small>五步，从「写完了」到「我知道你要哪个」</small></h2>
+    <ol class="timeline">
+      <li><b>挑一套皮肤</b>四套预设吃同一套语义标记，换皮肤一个字都不改标记。</li>
+      <li><b>写一页 HTML</b>按共用标记组织内容：卡片、表格、时间线、证据图、结论条。</li>
+      <li><b>调一次工具</b><code>show_html</code> 只收路径不收正文——正文进参数会白烧一遍 token。</li>
+      <li><b>页面直接出现在对话里</b>不用去文件树里翻，不用切浏览器；头部有刷新 / 全屏 / 浏览器打开。</li>
+      <li><b>点着回话</b>页面替你写好一句话，一键追加进输入框，不覆盖你已经写了一半的草稿。</li>
+    </ol>
+  </section>
+
+  <section class="section">
+    <h2>它是怎么送到的 <small>一张图说清全部机制</small></h2>
+    <figure class="evidence">
+      <img src="assets/arch.svg" alt="showmeWithHTML 数据流" />
+      <figcaption>图 1 · 这张图是相对路径引用的 —— 它能显示出来，就说明镜像路由在工作</figcaption>
+    </figure>
+    <div class="callout">
+      <span class="label">关键取舍</span>
+      页面里的相对引用之所以能用，是因为宿主按<strong>工作区目录结构镜像</strong>分发文件
+      （<code>/api/showme/raw/&lt;sessionId&gt;/&lt;路径&gt;</code>），而不是把文件读成 Blob。
+      代价是多一条路由，收益是 <code>&lt;img src="stills/a.png"&gt;</code> 这种写法照常可用，
+      而且同一个地址就是「在浏览器打开原文件」。
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>两句话的调用 <small>agent 侧真正要做的只有这些</small></h2>
+    <pre class="code"><code>write({ path: ".dsh/showme/review.html", content: "&lt;!doctype html&gt;…" })
+
+show_html({ path: ".dsh/showme/review.html",
+            title: "设计评审",
+            note: "挑一个变体" })</code></pre>
+    <dl class="kv">
+      <dt>页面位置</dt><dd><code>.dsh/showme/</code> —— 隐藏目录，不污染源码树、不进 git</dd>
+      <dt>皮肤</dt><dd>一行 <code>&lt;link rel="stylesheet" href="presets/swiss.css"&gt;</code></dd>
+      <dt>回传</dt><dd>页面内可选中文本（永远可用）+ <code>postMessage</code> 给卡片（一键填输入框）</dd>
+      <dt>依赖</dt><dd>无。断网、无 CDN、无构建；<code>lib/</code> 就是成品</dd>
+    </dl>
+    <div class="chips">
+      <span class="chip">show_html</span><span class="chip">镜像路由</span>
+      <span class="chip accent">四套预设</span><span class="chip">对话内卡片</span>
+      <span class="chip">全屏浮层</span><span class="chip">输入框回填</span>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>把回执交给我 <small>这段文本就是回执，选中复制或一键填入</small></h2>
+    <div class="chips" id="words"></div>
+    <pre class="code" style="padding:0;border:0"><textarea id="out" readonly
+      style="width:100%;min-height:120px;padding:16px;border:1px solid var(--line);background:none;color:var(--ink);font:400 var(--f-sm)/1.7 var(--mono);resize:vertical"
+      placeholder="在上面点选后，这里会出现一行一条的回执"></textarea></pre>
+    <p>
+      <button class="btn primary" id="send">交给卡片</button>
+      <button class="btn" id="copy">复制全部</button>
+      <button class="btn" id="clear">清空</button>
+      <span class="muted" id="msg"></span>
+    </p>
+    <hr class="rule" />
+    <p class="muted">
+      判定只存在<strong>这个页面</strong>里（沙箱里 <code>localStorage</code> 会直接抛异常，
+      所以刻意不用它）。刷新就没了 —— 所以请把上面的文本发给我。
+    </p>
+  </section>
+
+  <footer class="section">
+    <p class="muted">
+      <strong>showmeWithHTML</strong> · MIT © 2026 liceses ·
+      <a href="review.html">上一张展示页</a> ·
+      <a href="preset-gallery.html">预设画廊</a>
+    </p>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var FEEDBACK_TYPE = 'dsh-showme-feedback';
+  var WORDS = ['经历过', '没遇到', '补充'];
+
+  var SKINS = [
+    { slug: 'swiss', name: '瑞士国际主义' },
+    { slug: 'soft', name: '柔和现代' },
+    { slug: 'brutal', name: '新野兽派' },
+    { slug: 'blueprint', name: '蓝图 / 工程图' }
+  ];
+
+  var ITEMS = [
+    {
+      id: 'pain-markdown',
+      title: '读完一屏 Markdown，你还是「没看见」',
+      desc: '十几个变体的像素级差异、时间线、两种方案并排、改前改后对比 —— 这些是空间与视觉的信息，压成文字就是降维。'
+    },
+    {
+      id: 'pain-naming',
+      title: 'AI 产出了十几个变体，而你叫不出它们的名字',
+      desc: '对话于是变成「把第三个、就是那个带渐变的那张再改一下」。你嘴里的「第三个」和 agent 理解的，全凭运气。'
+    },
+    {
+      id: 'pain-feedback',
+      title: '反馈回去的路上，意思总会走样',
+      desc: '读页面 → 组织语言 → 打字 → agent 猜你指哪一项。这条路上每一步都在丢信息。'
+    },
+    {
+      id: 'pain-polish',
+      title: 'AI 写出来的页面有「廉价感」',
+      desc: '标题和正文一样大、行高挤成一团、颜色随机、还得连 CDN。四套预设把字号刻度与间距节奏做成令牌 —— 那才是好看真正的来源。'
+    }
+  ];
+
+  var skin = document.getElementById('skin');
+  var nowEl = document.getElementById('now');
+  var itemsEl = document.getElementById('items');
+  var outEl = document.getElementById('out');
+  var msgEl = document.getElementById('msg');
+  var wordsEl = document.getElementById('words');
+  var state = {};
+
+  for (var i = 0; i < ITEMS.length; i++) state[ITEMS[i].id] = { verdict: '', note: '' };
+
+  wordsEl.innerHTML = WORDS.map(function (w) { return '<span class="w chip">' + w + '</span>'; }).join('')
+    + '<span class="chip">备注可选</span>';
+
+  // ── 皮肤（演示：换的就是这一个 <link>） ─────────────────────────────
+  function applySkin(slug) {
+    var found = null;
+    for (var i = 0; i < SKINS.length; i++) if (SKINS[i].slug === slug) found = SKINS[i];
+    if (!found) return;
+    skin.setAttribute('href', 'presets/' + slug + '.css');
+    nowEl.innerHTML = '当前：<b>' + found.name + '</b>';
+    var buttons = document.querySelectorAll('.skinrow [data-skin]');
+    for (var j = 0; j < buttons.length; j++) {
+      var on = buttons[j].getAttribute('data-skin') === slug;
+      if (on) buttons[j].classList.add('on'); else buttons[j].classList.remove('on');
+    }
+  }
+
+  document.querySelector('.skinrow').addEventListener('click', function (ev) {
+    var slug = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-skin');
+    if (slug) applySkin(slug);
+  });
+
+  // ── 可点名条目 ──────────────────────────────────────────────────────
+  function esc(text) {
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  }
+
+  function render() {
+    var html = '';
+    for (var i = 0; i < ITEMS.length; i++) {
+      var it = ITEMS[i];
+      var s = state[it.id];
+      var buttons = WORDS.map(function (w) {
+        return '<button class="vbtn" data-w="' + w + '" data-id="' + it.id + '" aria-pressed="'
+          + (s.verdict === w ? 'true' : 'false') + '">' + w + '</button>';
+      }).join('');
+      html += '<div class="card item' + (s.verdict ? ' done' : '') + '" id="card-' + it.id + '">'
+        + '<div class="id">' + it.id + '</div>'
+        + '<h3>' + it.title + '</h3>'
+        + '<p>' + it.desc + '</p>'
+        + '<div class="row">' + buttons
+        + '<input class="note" data-id="' + it.id + '" placeholder="备注…" value="' + esc(s.note) + '" />'
+        + '</div></div>';
+    }
+    itemsEl.innerHTML = html;
+  }
+
+  function line(id) {
+    var s = state[id];
+    if (!s || s.verdict === '') return '';
+    return id + ' ' + s.verdict + (s.note ? '：' + s.note : '');
+  }
+
+  function compose() {
+    var lines = [];
+    for (var i = 0; i < ITEMS.length; i++) {
+      var one = line(ITEMS[i].id);
+      if (one) lines.push(one);
+    }
+    return lines.join('\n');
+  }
+
+  function sync() {
+    var text = compose();
+    outEl.value = text;
+    if (window.parent !== window) {
+      try { window.parent.postMessage({ type: FEEDBACK_TYPE, text: text }, '*'); } catch (e) { /* 忽略 */ }
+    }
+  }
+
+  itemsEl.addEventListener('click', function (ev) {
+    var el = ev.target;
+    if (!el || !el.getAttribute) return;
+    var id = el.getAttribute('data-id');
+    if (el.className && el.className.indexOf('vbtn') !== -1 && id) {
+      state[id].verdict = state[id].verdict === el.getAttribute('data-w') ? '' : el.getAttribute('data-w');
+      render(); sync();
+    }
+  });
+
+  itemsEl.addEventListener('input', function (ev) {
+    var el = ev.target;
+    if (!el || !el.className || el.className.indexOf('note') === -1) return;
+    state[el.getAttribute('data-id')].note = el.value;
+    sync();
+  });
+
+  document.getElementById('send').addEventListener('click', function () {
+    if (compose() === '') { msgEl.textContent = '还没有任何判定'; return; }
+    sync();
+    msgEl.textContent = window.parent === window
+      ? '不在卡片里，直接选中上面的文本复制即可'
+      : '已交给卡片 ✓ 点卡片上的「填入输入框」';
+  });
+
+  document.getElementById('copy').addEventListener('click', function () {
+    var text = compose();
+    if (text === '') { msgEl.textContent = '还没有任何判定'; return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        function () { msgEl.textContent = '已复制 ✓'; },
+        function () { outEl.focus(); outEl.select(); msgEl.textContent = '剪贴板被拦，已帮你选中，按 Ctrl+C'; }
+      );
+    } else {
+      outEl.focus(); outEl.select();
+      msgEl.textContent = '已选中，按 Ctrl+C';
+    }
+  });
+
+  document.getElementById('clear').addEventListener('click', function () {
+    for (var i = 0; i < ITEMS.length; i++) state[ITEMS[i].id] = { verdict: '', note: '' };
+    render(); sync(); msgEl.textContent = '已清空';
+  });
+
+  render();
+  applySkin('swiss');
+  sync();
+})();
+</script>
+</body>
+</html>

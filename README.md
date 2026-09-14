@@ -210,7 +210,7 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 156 项离线断言：宿主 64 / 客户端 30 / 预设 38 / 页面 24
+npm test                # 169 项离线断言：宿主 64 / 客户端 30 / 预设 38 / 页面 37
 
 # 装配是否真的生效 —— 对着运行中的 3080 打真实请求
 node test/live-probe.mjs <sessionId>
