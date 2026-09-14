@@ -127,7 +127,7 @@ New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\skills\showme-report" `
 | **画面内全屏** | 走框架级浮层，Esc 退出回到原位、滚动位置不丢。 |
 | **反馈两条路** | ① 页面 `postMessage` 给卡片 → 一键填入输入框；② 页面 `POST /api/showme/feedback` 追加到 `<工作区>/.dsh/showme/inbox.jsonl`。都不实现也不影响——页面里的可选中文本本来就是通用交换格式。 |
 | **四套预设样式** | 见下。 |
-| **回执体检** | `show_html` 展示前扫一遍页面：**缺可点名的 id、或缺可复制的汇总区**时，把提醒**随工具结果**交回给模型。实测过 skill 被加载、被读，却没被照做——工具结果是这条链路上唯一不依赖模型自觉的通道。 |
+| **回执体检 + 引用体检** | `show_html` 展示前扫一遍页面：**缺可点名的 id、或缺可复制的汇总区**，或**引用了不存在的相对资源**时，把提醒**随工具结果**交回给模型。实测过 skill 被加载、被读，却没被照做——工具结果是这条链路上唯一不依赖模型自觉的通道。 |
 | **skill `showme-report`** | 教 agent 怎么写这一页：挑皮肤、回执契约、交换格式、沙箱坑。**不含版式要求**——版式仍然是 agent 的活。 |
 
 ---
@@ -156,7 +156,10 @@ New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\skills\showme-report" `
 - 想用 [StyleKit](https://www.stylekit.top/zh/styles) 目录里的其他风格（148 种）？
   它的 `tokens` / `components` 是 Tailwind 类名与 React JSX，**单文件静态页直接用不了**；
   把它当**约束清单**（`colors` / `doList` / `dontList` / `philosophy`）自己翻译成原生 CSS。
-  具体路径写在 `skill/showme-report/SKILL.md` §2.3。
+  具体路径写在 `skill/showme-report/SKILL.md` §2.4。
+- **预设不是强制的**：要评审/复刻某个具体系统的视觉时（比如评审 DSH 插件自己的设置页），
+  用那个系统的官方调色板才对——这时**不要写 `<link>`**，否则两套视觉会叠在一起。
+  理由写在 skill §2.3。
 
 ---
 
@@ -222,7 +225,7 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 173 项离线断言：宿主 68 / 客户端 30 / 预设 38 / 页面 37
+npm test                # 177 项离线断言：宿主 72 / 客户端 30 / 预设 38 / 页面 37
 
 # 装配是否真的生效 —— 对着运行中的 3080 打真实请求
 node test/live-probe.mjs <sessionId>

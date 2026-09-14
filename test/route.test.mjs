@@ -401,6 +401,35 @@ check('只做了一半（有 id 没有汇总区）仍会被提醒', () => {
   assert.ok(!/pointable ids/.test(halfReceipt.hint), 'id 那半边不该被点名')
 })
 
+// ── 引用体检：页面引的相对资源必须真的存在 ──────────────────────────────
+console.log('\n[工具] 引用体检')
+
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'dangling.html'),
+  '<div data-id="a">x</div><textarea readonly></textarea>'
+    + '<img src="stills/missing.png"><link href="presets/soft.css" rel="stylesheet">',
+  'utf8',
+)
+const dangling = await tool.execute({ path: '.dsh/showme/dangling.html' }, exec)
+check('引用不存在的图片会被点名', () => assert.match(dangling.hint, /stills\/missing\.png/))
+check('预设引用不误报（宿主这次调用刚落地过）', () =>
+  assert.ok(!/presets\/soft\.css/.test(dangling.hint), '预设不该被当成缺失资源'),
+)
+
+await mkdir(join(workspace, '.dsh', 'showme', 'stills'), { recursive: true })
+await writeFile(join(workspace, '.dsh', 'showme', 'stills', 'missing.png'), 'x', 'utf8')
+const fixed = await tool.execute({ path: '.dsh/showme/dangling.html' }, exec)
+check('把文件补上之后就不再提醒', () => assert.equal(fixed.hint, ''))
+
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'abs-refs.html'),
+  '<div data-id="a">x</div><textarea readonly></textarea>'
+    + '<a href="https://example.com/x.html">外链</a><a href="#top">锚点</a><img src="/api/x.png">',
+  'utf8',
+)
+const absRefs = await tool.execute({ path: '.dsh/showme/abs-refs.html' }, exec)
+check('绝对 / 协议 / 锚点引用不参与检查', () => assert.equal(absRefs.hint, ''))
+
 // ── 预设样式落地（create-only） ──────────────────────────────────────────
 console.log('\n[工具] 预设样式落地')
 
