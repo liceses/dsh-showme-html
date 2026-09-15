@@ -371,7 +371,7 @@ console.log('\n[工具] 回执体检')
 check('裸页面（没有回执）会被点名提醒', () => {
   assert.match(ok.hint, /Host check/)
   assert.match(ok.hint, /pointable ids/)
-  assert.match(ok.hint, /copyable summary/)
+  assert.match(ok.hint, /postMessage/)
 })
 
 check('render 把提醒带给模型；没有提醒时不夹带', () => {
@@ -382,36 +382,56 @@ check('render 把提醒带给模型；没有提醒时不夹带', () => {
   assert.ok(!/Host check/.test(clean[0].text), '干净页面不该被夹带提醒')
 })
 
+const POST = '<script>parent.postMessage({type:"dsh-showme-feedback",text:""},"*")</script>'
+
 await writeFile(
   join(workspace, '.dsh', 'showme', 'with-receipt.html'),
-  '<div class="card" data-id="pain-a">x</div><textarea readonly></textarea>',
+  `<div class="card" data-id="pain-a">x</div><textarea readonly></textarea>${POST}`,
   'utf8',
 )
 const withReceipt = await tool.execute({ path: '.dsh/showme/with-receipt.html' }, exec)
-check('带 data-id + readonly textarea 的页面不提醒', () => assert.equal(withReceipt.hint, ''))
+check('id + postMessage 都有的页面不提醒', () => assert.equal(withReceipt.hint, ''))
 
+// 关键回归：只有"可复制文本"、没有 postMessage —— 这正是"回执还得自己抄"的那一类。
 await writeFile(
-  join(workspace, '.dsh', 'showme', 'half-receipt.html'),
-  '<div class="card" data-id="pain-a">x</div>',
+  join(workspace, '.dsh', 'showme', 'copy-only.html'),
+  '<div class="card" data-id="pain-a">x</div><textarea readonly></textarea>'
+    + '<button>全选下面的文本</button>',
   'utf8',
 )
-const halfReceipt = await tool.execute({ path: '.dsh/showme/half-receipt.html' }, exec)
-check('只做了一半（有 id 没有汇总区）仍会被提醒', () => {
-  assert.match(halfReceipt.hint, /copyable summary/)
-  assert.ok(!/pointable ids/.test(halfReceipt.hint), 'id 那半边不该被点名')
+const copyOnly = await tool.execute({ path: '.dsh/showme/copy-only.html' }, exec)
+check('只给"可复制文本"、不走通道的页面会被点名', () => {
+  // 认「缺的是什么」那一段，而不是整段文案——说明里本来就会提到 postMessage。
+  assert.match(copyOnly.hint, /postMessage` hook-up/)
+  assert.ok(!/pointable ids\s*\+/.test(copyOnly.hint), 'id 没缺，不该被算进 missing')
+})
+
+// 反向的一半：走了通道，但没有可点名的 id。
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'no-ids.html'),
+  `<textarea readonly></textarea>${POST}`,
+  'utf8',
+)
+const noIds = await tool.execute({ path: '.dsh/showme/no-ids.html' }, exec)
+check('只做了一半（有通道没有 id）仍会被提醒', () => {
+  assert.match(noIds.hint, /pointable ids/)
+  assert.ok(!/postMessage` hook-up/.test(noIds.hint), '通道那半边不该被点名')
 })
 
 // ── 引用体检：页面引的相对资源必须真的存在 ──────────────────────────────
+// 注意：这两个夹具都带上 POST，把回执那半边做干净，
+// 这样 hint 里剩下的只可能是引用问题。
 console.log('\n[工具] 引用体检')
 
 await writeFile(
   join(workspace, '.dsh', 'showme', 'dangling.html'),
-  '<div data-id="a">x</div><textarea readonly></textarea>'
+  `<div data-id="a">x</div><textarea readonly></textarea>${POST}`
     + '<img src="stills/missing.png"><link href="presets/soft.css" rel="stylesheet">',
   'utf8',
 )
 const dangling = await tool.execute({ path: '.dsh/showme/dangling.html' }, exec)
 check('引用不存在的图片会被点名', () => assert.match(dangling.hint, /stills\/missing\.png/))
+check('回执那半边做干净了（不夹带回执提醒）', () => assert.ok(!/pointable ids/.test(dangling.hint)))
 check('预设引用不误报（宿主这次调用刚落地过）', () =>
   assert.ok(!/presets\/soft\.css/.test(dangling.hint), '预设不该被当成缺失资源'),
 )
@@ -423,7 +443,7 @@ check('把文件补上之后就不再提醒', () => assert.equal(fixed.hint, '')
 
 await writeFile(
   join(workspace, '.dsh', 'showme', 'abs-refs.html'),
-  '<div data-id="a">x</div><textarea readonly></textarea>'
+  `<div data-id="a">x</div><textarea readonly></textarea>${POST}`
     + '<a href="https://example.com/x.html">外链</a><a href="#top">锚点</a><img src="/api/x.png">',
   'utf8',
 )

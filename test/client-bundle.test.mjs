@@ -140,6 +140,60 @@ check('输入镜像座位注册在 conversation.input.left', () => {
   assert.equal(input.registration.id, 'dsh-showme-html-input')
 })
 
+// ── 输入面镜像：真契约是 ownerProps: []，草稿只能走 useInput 标准 prop ──
+// 早期版本读 `props.input?.draft`（那个属性不存在）→ draft 永远空串 →
+// 「填入输入框」变成替换草稿而不是追加。这一组就是那次现场回归。
+console.log('\n[输入面镜像] 草稿从哪来')
+
+const capture = registrations.find((entry) => entry.registration.name === 'conversation.input.left').component
+
+/** 造一份该座位的标准 props。 */
+function captureProps(draft, extra = {}) {
+  let called = false
+  const props = {
+    sessionId: 'sess-9',
+    inputActions: { setDraft: () => {} },
+    useInput: (selector) => {
+      called = true
+      return selector({ draft })
+    },
+    ...extra,
+  }
+  return { props, wasCalled: () => called }
+}
+
+check('用 useInput 选择器读草稿', () => {
+  internals.inputRefs.draft = ''
+  const { props, wasCalled } = captureProps('我正在写别的')
+  capture(props)
+  assert.ok(wasCalled(), '没有调用 useInput')
+  assert.equal(internals.inputRefs.draft, '我正在写别的')
+  assert.equal(internals.inputRefs.sessionId, 'sess-9')
+})
+
+check('不再从 props.input 取值（真实契约里没有这个属性）', () => {
+  internals.inputRefs.draft = ''
+  const { props } = captureProps('', { input: { draft: '旧写法的值' } })
+  capture(props)
+  assert.equal(internals.inputRefs.draft, '', '不该读 props.input.draft')
+})
+
+check('缺 useInput 时草稿退化为空串而不是崩掉', () => {
+  internals.inputRefs.draft = ''
+  capture({ sessionId: 's', inputActions: null, useInput: () => undefined })
+  assert.equal(internals.inputRefs.draft, '')
+  assert.equal(internals.inputRefs.actions, null)
+})
+
+check('接上真草稿之后，「填入」是追加而不是替换（端到端）', () => {
+  let written = null
+  const { props } = captureProps('我先前写的话')
+  props.inputActions = { setDraft: (text) => { written = text } }
+  capture(props)
+  internals.insertIntoComposer('pain-a 同意', null)
+  assert.equal(written, '我先前写的话\npain-a 同意')
+})
+
 console.log('\n[纯逻辑] 镜像路由地址')
 
 check('常规路径逐段编码、保留目录结构', () =>
@@ -220,11 +274,6 @@ check('没有输入面时回退到卡片自带的 actions', () => {
 check('两处都没有：返回 false 而不是抛', () => {
   internals.inputRefs.actions = null
   assert.equal(internals.insertIntoComposer('x', undefined), false)
-})
-check('inputRefs 被 InputCapture 之外的写入不会污染 sessionId 语义', () => {
-  internals.inputRefs.draft = ''
-  internals.inputRefs.actions = { setDraft: () => {} }
-  assert.equal(internals.inputRefs.sessionId, '')
 })
 
 console.log('\n[卡片] 早退与错误态')
