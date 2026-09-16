@@ -29,10 +29,11 @@
     "skill"
   ],
   "scripts": {
-    "test": "node test/route.test.mjs && node test/client-bundle.test.mjs && node test/presets.test.mjs && node test/page-smoke.test.mjs",
+    "test": "node test/route.test.mjs && node test/client-bundle.test.mjs && node test/presets.test.mjs && node test/templates.test.mjs && node test/page-smoke.test.mjs",
     "test:host": "node test/route.test.mjs",
     "test:client": "node test/client-bundle.test.mjs",
     "test:presets": "node test/presets.test.mjs",
+    "test:templates": "node test/templates.test.mjs",
     "test:page": "node test/page-smoke.test.mjs",
     "probe": "node test/live-probe.mjs"
   },

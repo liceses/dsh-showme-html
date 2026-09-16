@@ -12,6 +12,10 @@ whenToUse: 你准备用 HTML 页面代替长篇 Markdown 向用户汇报；或�
 
 四件事，缺一不可：
 
+0. **先看 §1.1** —— 三份骨架（`review` / `pick` / `report`），**通常你只需要写一个数据文件**：
+   `cp` 外壳 → `write <同名>.data.js` → 展示。交互、控件位置、组句、通道全在内核里，
+   你不用担心实现错。
+
 1. **给每个可点名的东西一个稳定 id**，并且在页面上**显示出来**（`pain-naming`、`hero-v3`、`f2`）；
 2. **把表态控件放在那个东西旁边**（同一个卡片 / `<figure>` / 同一行）——
    不要集中到页面另一处让用户来回翻页（§3.2）；
@@ -49,6 +53,8 @@ whenToUse: 你准备用 HTML 页面代替长篇 Markdown 向用户汇报；或�
 
 ## 1. 交付流程
 
+> **先看 1.1**：大多数页面不用自己写 HTML，套一份模板就行。
+
 1. **挑一套皮肤**（见 §2）。默认 `soft`；没有特别理由就用它。
 2. **写页面**：用 `write` 写一个 HTML，路径放工作区里的
    `.dsh/showme/<名字>.html`（隐藏目录，不污染源码树、不进 git）。
@@ -60,6 +66,81 @@ whenToUse: 你准备用 HTML 页面代替长篇 Markdown 向用户汇报；或�
    - **不要**把 HTML 正文塞进工具参数——工具只收路径，正文会白烧一遍 token。
 5. **说一句**：在回复里告诉用户这页要他干什么（"看看要不要改""挑一个"），
    以及反馈怎么给你（见 §4）。
+
+### 1.1 推荐路径：套模板（**大多数页面不用自己写**）
+
+工作区里有三份骨架，宿主在你第一次展示页面时自动落到 `.dsh/showme/templates/`：
+
+| 骨架 | 形状 | 什么时候用 |
+|---|---|---|
+| `review.html` | 逐项表态 | 一排条目，每条一个判定 + 备注。带图不带图都行。**最常用** |
+| `pick.html` | 候选挑选 | 单选 / 多选。封面选哪张、这几张素材留哪几个 |
+| `report.html` | 图文汇报 | 有图 / 表 / 时间线、不需要逐项表态；每小节一个轻回执 |
+
+**一页 = 外壳 + 内核 + 数据**，你只写最后那个：
+
+```
+.dsh/showme/templates/<shape>.html   ← 外壳（cp 出来改名）
+.dsh/showme/templates/core.js        ← 内核：渲染与交互全在这里，别改
+.dsh/showme/<名字>.html              ← cp 出来的页面
+.dsh/showme/<名字>.data.js           ← **你唯一要写的东西**
+```
+
+三步：
+
+1. **拷外壳**（不要手写页面）：
+
+   ```bash
+   cp .dsh/showme/templates/review.html .dsh/showme/<名字>.html
+   ```
+
+2. **写数据**：`write .dsh/showme/<名字>.data.js`，内容就是 `window.SHOWME = { … }`。
+   **文件名必须和页面同名**：`foo.html` ↔ `foo.data.js`（内核按页面文件名推导）。
+
+3. **展示**：`show_html({ path: '.dsh/showme/<名字>.html' })`。
+
+**为什么这样最省**：你只写数据（几百 token）。不用读模板、不用重写交互。
+老写法是每次从头写一个 10KB 的页面（≈3–4 千 token），而且**每次都可能把回执写错**。
+
+**为什么数据走 `<script src>` 而不是 `fetch`**：展示页在 sandbox 的不透明源里，
+`fetch` 同源资源会被当成跨域请求拦掉（我们不发 CORS 头）。经典 script 不受这条限制。
+
+#### 共用字段
+
+```js
+window.SHOWME = {
+  skin: 'soft',       // soft | swiss | brutal | blueprint —— 换皮肤就改这一行
+  kicker: '栏目',
+  title: '大标题',
+  lead: '导语',
+  meta: ['标签', '标签'],
+  verdicts: ['同意', '要改'],   // 可选：覆盖该形状的默认判动词
+  sections: [ … ],              // review / report 用
+  candidates: [ … ],            // pick 用
+}
+```
+
+**review** — `sections[].items[] = { id, title, desc?, image?, caption? }`。
+`id` 必填且同页唯一（**这就是用户点名用的手柄**）；`image` 是相对页面的路径。
+
+**pick** — `mode: 'single' | 'multi'`、`question: '要用户定什么的一句话'`、
+`candidates[] = { id, title, desc?, image?, caption? }`。
+
+**report** — `sections[].blocks[]`，块类型：
+`text` / `image` / `table` / `callout` / `timeline` / `kv` / `code` / `chips` / `stat` / `rule`。
+每小节默认带一个轻回执，`sectionReceipt: false` 可关掉。
+
+#### 套模板时你仍然要做的
+
+- **挑皮肤**——数据里那一行 `skin`（§2）；
+- **写内容**——标题、导语、每一条的说明，永远是你的活；
+- **放图**——图片放在页面旁边，用相对路径引用（上面第 3 步）。
+
+#### 什么时候**不**套模板
+
+模板就是"条目式"的：一排可点名的东西。**架构图、时序图、长文分析、并排对比**
+不是这个形状——那就自己写（§3 的回执契约、§4 的通道、§5 的沙箱约束照样适用）。
+**模板是可选骨架，不是形式强制。**
 
 > 相对路径为什么能用：宿主有一条按工作区目录结构镜像的只读路由
 > `/api/showme/raw/<sessionId>/<工作区相对路径>`，页面就是从它在的那个目录被服务的，

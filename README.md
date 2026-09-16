@@ -163,6 +163,48 @@ New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\skills\showme-report" `
 
 ---
 
+## 模板：三份骨架
+
+skill 用文字规定"回执怎么做"，模型每次都重新实现一遍，于是**控件位置、组句、通道时机反复出错**。
+模板把"实现"变成"填数据"。
+
+宿主在你第一次展示页面时把骨架落到 `.dsh/showme/templates/`（create-only）：
+
+| 骨架 | 形状 | 什么时候用 |
+|---|---|---|
+| `review.html` | 逐项表态 | 一排条目，每条一个判定 + 备注。带图不带图都行。**最常用** |
+| `pick.html` | 候选挑选 | 单选 / 多选。封面选哪张、这几张素材留哪几个 |
+| `report.html` | 图文汇报 | 有图 / 表 / 时间线、不需要逐项表态；每小节一个轻回执 |
+
+**一页 = 外壳 + 内核 + 数据**，你只写最后那个：
+
+```
+templates/<shape>.html   外壳（cp 出来改名）
+templates/core.js        内核：渲染与交互全在这里，三个形状共用一份，别改
+<名字>.html              cp 出来的页面
+<名字>.data.js           ← 你唯一要写的，内容就是 window.SHOWME = { … }
+```
+
+```bash
+cp .dsh/showme/templates/review.html .dsh/showme/mypage.html
+# 然后 write .dsh/showme/mypage.data.js
+```
+
+**文件名必须同名**：`mypage.html` ↔ `mypage.data.js`（内核按页面文件名推导）。
+
+- **为什么最省**：只写数据（几百 token）。老写法每次从头写一个 10KB 页面 ≈ 3–4 千 token，
+  而且每次都可能把回执写错。
+- **为什么数据走 `<script src>` 而不是 `fetch`**：展示页在 sandbox 的不透明源里，
+  `fetch` 同源资源会被当成跨域请求拦掉（我们不发 CORS 头）。经典 script 不受这条限制。
+- **内核只写一份**：三个形状共用 `core.js`。这一路我已经被"抄来抄去抄出 bug"咬过一次
+  （照抄 `dsh-text-drop` 的 `props.input`，而那个属性根本不存在），不想再来第二次。
+- **模板是可选骨架，不是形式强制**：架构图、时序图、长文分析不是"条目式"的形状，
+  那就自己写——§3 的回执契约、§4 的通道、§5 的沙箱约束照样适用。
+
+`examples/` 里的 `template-demo.html` 是一个真实用例：外壳 **548 字节**，内容全在数据文件里。
+
+---
+
 ## 安全模型（两层，刻意不同）
 
 同一个地址，两种档位：
@@ -212,20 +254,21 @@ lib/index.js          宿主半区：show_html 工具 + 镜像读路由 + 反馈
 lib/client.js         浏览器半区：对话卡片 + 画面内全屏 + 输入框镜像（closure-factory）
 styles/*.css          四套预设样式（插件资产，宿主动态落地到工作区）
 styles/index.json     预设清单：一行 default 就是默认皮肤
+templates/            三份骨架 + core.js（插件资产，同样动态落地）
 skill/showme-report/  产品核心：功能契约 + 交换格式 + 沙箱坑
 examples/             示例页源码（页面冒烟测试的夹具）
-test/                 离线验收：宿主 / 客户端 / 预设 / 页面 四组
+test/                 离线验收：宿主 / 客户端 / 预设 / 模板 / 页面 五组
 docs/                 需求演进与定稿方案
 ```
 
-`.dsh/` 不进仓库——那是 DSH 在本工作区里的运行痕迹（展示副本、预设落地副本、反馈信箱）。
+`.dsh/` 不进仓库——那是 DSH 在本工作区里的运行痕迹（展示副本、预设与模板的落地副本、反馈信箱）。
 
 ---
 
 ## 开发
 
 ```powershell
-npm test                # 182 项离线断言：宿主 74 / 客户端 33 / 预设 38 / 页面 37
+npm test                # 207 项离线断言：宿主 76 / 客户端 33 / 预设 38 / 模板 23 / 页面 37
 
 # 装配是否真的生效 —— 对着运行中的 3080 打真实请求
 node test/live-probe.mjs <sessionId>

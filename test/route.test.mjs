@@ -418,6 +418,38 @@ check('只做了一半（有通道没有 id）仍会被提醒', () => {
   assert.ok(!/postMessage` hook-up/.test(noIds.hint), '通道那半边不该被点名')
 })
 
+// ── 关键回归：交互写在外链脚本里时不能误报 ─────────────────────────────
+// 实测现场：模板外壳只有 548 字节，回执逻辑全在 templates/core.js 里，
+// 只扫页面本体会被自己的检查咬到。
+console.log('\n[工具] 外链脚本也要扫')
+
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'kernel.js'),
+  'var html = \'<div data-id="a">x</div>\'; '
+    + 'parent.postMessage({ type: "dsh-showme-feedback", text: html }, "*");',
+  'utf8',
+)
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'shell.html'),
+  '<div class="page"><div id="sm-content"></div></div><script src="kernel.js"></script>',
+  'utf8',
+)
+const shell = await tool.execute({ path: '.dsh/showme/shell.html' }, exec)
+check('回执在外链脚本里时通过（模板页就是这种形状）', () => assert.equal(shell.hint, ''))
+
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'kernel-empty.js'),
+  'console.log("这里什么都没有")',
+  'utf8',
+)
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'shell-empty.html'),
+  '<div class="page"><div id="sm-content"></div></div><script src="kernel-empty.js"></script>',
+  'utf8',
+)
+const shellEmpty = await tool.execute({ path: '.dsh/showme/shell-empty.html' }, exec)
+check('外链脚本里也没有回执时，照样被点名', () => assert.match(shellEmpty.hint, /Host check/))
+
 // ── 引用体检：页面引的相对资源必须真的存在 ──────────────────────────────
 // 注意：这两个夹具都带上 POST，把回执那半边做干净，
 // 这样 hint 里剩下的只可能是引用问题。

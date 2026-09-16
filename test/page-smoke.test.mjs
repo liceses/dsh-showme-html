@@ -104,6 +104,14 @@ for (const target of targets) {
   const path = resolve(target)
   const html = await readFile(path, 'utf8')
   const name = path.split(/[\\/]/).pop()
+
+  // 模板外壳：正文由 templates/core.js 按数据渲染，外壳本身只有几百字节。
+  // 它们由 templates.test.mjs 覆盖（把真数据喂进内核），这里跳过。
+  if (/templates\/core\.js/.test(html)) {
+    console.log(`\n[页面] ${name}  skip 模板外壳（templates.test.mjs 覆盖）`)
+    continue
+  }
+
   console.log(`\n[页面] ${name}`)
 
   const match = html.match(/<script>([\s\S]*?)<\/script>/)
