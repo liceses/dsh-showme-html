@@ -192,6 +192,14 @@ cp .dsh/showme/templates/review.html .dsh/showme/mypage.html
 
 **文件名必须同名**：`mypage.html` ↔ `mypage.data.js`（内核按页面文件名推导）。
 
+> 📖 **数据字段表在 [`templates/README.md`](templates/README.md)**——三个形状、全部字段、
+> 10 种内容块、常见错误，4KB 一份。它也会落到 `.dsh/showme/templates/README.md`。
+>
+> **不要读 `core.js`**：那是实现（20KB），字段表那一份就够了。
+> 实测过：一个会话为了搞清"它认哪些块类型"，把内核通读了一遍（≈5–6 千 token），
+> 而答案就是那张 10 行的块类型表。`test/templates.test.mjs` 里有**一条专门盯着
+> 这份文档与内核一致性的测试**——内核加了块类型而 README 没跟上，测试会红。
+
 - **为什么最省**：只写数据（几百 token）。老写法每次从头写一个 10KB 页面 ≈ 3–4 千 token，
   而且每次都可能把回执写错。
 - **为什么数据走 `<script src>` 而不是 `fetch`**：展示页在 sandbox 的不透明源里，
@@ -268,7 +276,7 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 207 项离线断言：宿主 76 / 客户端 33 / 预设 38 / 模板 23 / 页面 37
+npm test                # 213 项离线断言：宿主 76 / 客户端 33 / 预设 38 / 模板 29 / 页面 37
 
 # 装配是否真的生效 —— 对着运行中的 3080 打真实请求
 node test/live-probe.mjs <sessionId>

@@ -286,6 +286,30 @@ check('说明里给出了怎么办', () => {
   assert.match(missing.content.innerHTML, /同名同目录/)
 })
 
+console.log('\n[文档] README 必须覆盖内核真正认的东西')
+
+// 为什么值得一条测试：这份 README 是模型**唯一该读**的接口文档。
+// 内核加了块类型而 README 没跟上，模型就会去读内核 —— 那正是要防的事
+// （实测：有会话为了搞清"认哪些块类型"把 20KB 内核通读了一遍）。
+const readme = await readFile(join(here, '..', 'templates', 'README.md'), 'utf8')
+const implemented = [...new Set([...source.matchAll(/case '([a-z]+)':/g)].map((match) => match[1]))]
+
+check('从内核源码里抽到了块类型', () => {
+  assert.ok(implemented.length >= 8, `只抽到 ${implemented.length} 种：${implemented.join(' ')}`)
+})
+check('README 写全了每一种块类型（含示例）', () => {
+  const missing = implemented.filter((type) => !readme.includes(`type: '${type}'`))
+  assert.deepEqual(missing, [], `README 没写：${missing.join(' ')}`)
+})
+check('README 覆盖三个形状', () => {
+  for (const shape of ['review', 'pick', 'report']) {
+    assert.ok(readme.includes(`## \`${shape}\` 形状`), `README 没写 ${shape} 形状`)
+  }
+})
+check('README 明确劝退读内核', () => assert.match(readme, /不是 `core\.js`/))
+check('README 说了数据文件必须和页面同名', () => assert.match(readme, /必须和页面同名/))
+check('内核头部也指向 README', () => assert.match(source, /别读这个文件/))
+
 console.log('\n[约束] 沙箱里不能用的东西')
 
 // 必须剥掉注释再查：头注释里写着"不依赖 localStorage"，否则匹配到的是自己的文档。
