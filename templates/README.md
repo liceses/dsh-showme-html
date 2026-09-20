@@ -14,17 +14,34 @@
 ## 一页 = 外壳 + 内核 + 数据
 
 ```
-templates/<shape>.html   外壳（cp 出来改名）
+templates/<shape>.html   外壳（**直接 write，别 cp** —— 见下）
 templates/core.js        内核：别读、别改
-<名字>.html              cp 出来的页面
+templates/README.md      本文件
+<名字>.html              你写的页面
 <名字>.data.js           ← **你唯一要写的东西**
 ```
 
-```bash
-cp .dsh/showme/templates/review.html .dsh/showme/<名字>.html
-# 然后 write .dsh/showme/<名字>.data.js
-# 最后 show_html({ path: '.dsh/showme/<名字>.html' })
+> ⚠️ **`templates/` 在新工作区里还不存在。** 宿主是在**第一次 `show_html`** 时才创建它的，
+> 所以第一步**不要 `cp`**（会报 no such file）—— **直接 `write` 下面这个外壳**：
+
+```html
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>—</title>
+<link id="skin" rel="stylesheet" href="presets/soft.css"></head><body>
+<div class="page"><div id="sm-masthead"></div><div id="sm-content"></div><div id="sm-receipt"></div></div>
+<script>window.SHOWME_SHAPE = 'review'</script>
+<script src="templates/core.js"></script></body></html>
 ```
+
+`'review'` 换成 `'pick'` 或 `'report'` 就是另外两个形状。
+你引用的 `core.js`、`presets/*.css` 会在**展示那一刻已经就位**（宿主先落地、后校验），
+浏览器取它们时一定存在。
+
+> 🔧 **想先把资产催出来**（比如你想读这份 README 或 `presets/index.json`）：
+> **随便调一次 `show_html`**，哪怕路径不存在、扩展名不对——
+> 落地排在**校验之前**，失败也会跑。之后 `ls .dsh/showme/` 就能看到 `templates/` 与 `presets/`。
+
+然后 `write .dsh/showme/<名字>.data.js`，最后 `show_html({ path: '.dsh/showme/<名字>.html' })`。
 
 **数据文件名必须和页面同名**：`foo.html` ↔ `foo.data.js`。
 内核按页面自己的文件名去推导数据文件名；不同名会显示"没找到数据文件"。

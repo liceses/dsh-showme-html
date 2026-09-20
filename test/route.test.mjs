@@ -506,6 +506,29 @@ await tool.execute({ path: '.dsh/showme/review.html' }, exec)
 const afterRerun = await readFile(join(presetDir, 'soft.css'), 'utf8')
 check('create-only：不覆盖你改过的预设', () => assert.equal(afterRerun, '/* mine */'))
 
+// ── 新工作区的第一步：资产要在**校验之前**落地 ──────────────────────────
+// 现场：agent 按 skill 去 `cp .dsh/showme/templates/review.html`，报 no such file ——
+// 因为落地原来排在流程末尾，而它需要资产的那个动作排在流程开头。
+// 现在的约定：随便调一次 show_html（哪怕注定失败）就能把资产催出来。
+console.log('\n[工具] 失败的调用也要能把资产催出来')
+
+const freshWorkspace = await mkdtemp(join(tmpdir(), 'showme-fresh-'))
+const freshExec = { agent: { session: { header: { cwd: freshWorkspace } } } }
+
+await assert.rejects(() => tool.execute({ path: '.dsh/showme/does-not-exist.html' }, freshExec), /cannot find/)
+
+const freshTemplates = await readdir(join(freshWorkspace, '.dsh', 'showme', 'templates')).catch(() => [])
+const freshPresets = await readdir(join(freshWorkspace, '.dsh', 'showme', 'presets')).catch(() => [])
+check('调用失败了，但模板已经落地', () => {
+  assert.ok(freshTemplates.includes('core.js'), 'templates/core.js 没落地')
+  assert.ok(freshTemplates.includes('README.md'), 'templates/README.md 没落地')
+})
+check('预设也一并落地', () => assert.ok(freshPresets.includes('soft.css')))
+
+await assert.rejects(() => tool.execute({ path: '.dsh/showme/x.md' }, freshExec), /only shows \.html/)
+const afterBadExt = await readdir(join(freshWorkspace, '.dsh', 'showme', 'templates')).catch(() => [])
+check('扩展名不对的调用同样能催出资产', () => assert.ok(afterBadExt.includes('core.js')))
+
 const cases = [
   [{ path: '' }, exec, /non-empty/],
   [{ path: 'notes.md' }, exec, /only shows \.html/],

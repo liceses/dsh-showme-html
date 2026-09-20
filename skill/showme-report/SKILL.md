@@ -80,29 +80,47 @@ whenToUse: 你准备用 HTML 页面代替长篇 Markdown 向用户汇报；或�
 **一页 = 外壳 + 内核 + 数据**，你只写最后那个：
 
 ```
-.dsh/showme/templates/<shape>.html   ← 外壳（cp 出来改名）
-.dsh/showme/templates/core.js        ← 内核：渲染与交互全在这里，别改
-.dsh/showme/<名字>.html              ← cp 出来的页面
+.dsh/showme/templates/<shape>.html   ← 外壳（**直接 write，别 cp**）
+.dsh/showme/templates/core.js        ← 内核：渲染与交互全在这里，别读、别改
+.dsh/showme/templates/README.md      ← 字段表（4KB）—— 要查字段就看它
+.dsh/showme/<名字>.html              ← 你写的页面
 .dsh/showme/<名字>.data.js           ← **你唯一要写的东西**
 ```
 
 三步：
 
-1. **拷外壳**（不要手写页面）：
+1. **写外壳**（**不要 `cp`**，直接 `write`；就下面这几行）：
 
-   ```bash
-   cp .dsh/showme/templates/review.html .dsh/showme/<名字>.html
+   > ⚠️ **`templates/` 在新工作区里还不存在** —— 宿主是在**第一次 `show_html`** 时才创建它的。
+   > 所以第一步**不要 `cp`**（会报 no such file），**直接 write 这个外壳**：
+
+   ```html
+   <!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+   <meta name="viewport" content="width=device-width,initial-scale=1"><title>—</title>
+   <link id="skin" rel="stylesheet" href="presets/soft.css"></head><body>
+   <div class="page"><div id="sm-masthead"></div><div id="sm-content"></div><div id="sm-receipt"></div></div>
+   <script>window.SHOWME_SHAPE = 'review'</script>
+   <script src="templates/core.js"></script></body></html>
    ```
+
+   把 `'review'` 换成 `'pick'` 或 `'report'` 就是另外两个形状。
+   **你引用的 `templates/core.js`、`templates/README.md`、`presets/*.css` 会在你展示的那一刻
+   已经就位**（宿主在 `show_html` 里先落地、后校验），浏览器取它们时一定存在。
 
 2. **写数据**：`write .dsh/showme/<名字>.data.js`，内容就是 `window.SHOWME = { … }`。
    **文件名必须和页面同名**：`foo.html` ↔ `foo.data.js`（内核按页面文件名推导）。
 
 3. **展示**：`show_html({ path: '.dsh/showme/<名字>.html' })`。
 
-> 📖 **数据字段表在同目录的 `README.md`** → `.dsh/showme/templates/README.md`。
-> **不要读 `core.js`** —— 那是实现（20KB），字段表那一份（4KB）就够了。
+> 🔧 **想先把资产催出来**（例如想读 `templates/README.md` 或 `presets/index.json`）：
+> **随便调一次 `show_html`**，哪怕路径不存在、扩展名不对——落地在校验**之前**就已经跑了。
+> 之后 `ls .dsh/showme/` 就能看到 `templates/` 与 `presets/`。
+
+> 📖 **字段表：本 skill 下面几节就够了**（§1.1 的字段表 + §3 的回执契约）。
+> 想要更集中的版本，看 `.dsh/showme/templates/README.md`（4KB）。
+> **不要读 `core.js`** —— 那是实现（20KB）。
 > 实测：有会话为了搞清"它认哪些块类型"把内核通读了一遍，≈5–6 千 token；
-> 而答案就是 README 里一张 10 行的表。**表里没有的块类型，就是不支持。**
+> 而答案就是一张 10 行的表。**表里没有的块类型，就是不支持。**
 
 **为什么这样最省**：你只写数据（几百 token）。不用读模板、不用重写交互。
 老写法是每次从头写一个 10KB 的页面（≈3–4 千 token），而且**每次都可能把回执写错**。

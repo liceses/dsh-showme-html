@@ -179,16 +179,30 @@ skill 用文字规定"回执怎么做"，模型每次都重新实现一遍，于
 **一页 = 外壳 + 内核 + 数据**，你只写最后那个：
 
 ```
-templates/<shape>.html   外壳（cp 出来改名）
-templates/core.js        内核：渲染与交互全在这里，三个形状共用一份，别改
-<名字>.html              cp 出来的页面
+templates/<shape>.html   外壳（**直接 write，别 cp** —— 见下）
+templates/core.js        内核：渲染与交互全在这里，三个形状共用一份，别读、别改
+<名字>.html              你写的页面
 <名字>.data.js           ← 你唯一要写的，内容就是 window.SHOWME = { … }
 ```
 
-```bash
-cp .dsh/showme/templates/review.html .dsh/showme/mypage.html
-# 然后 write .dsh/showme/mypage.data.js
+> ⚠️ **`templates/` 在新工作区里还不存在。** 宿主是在**第一次 `show_html`** 时才创建它的，
+> 而 agent 需要外壳的动作排在流程**开头**——所以第一步 `cp` 必然失败。
+> 落点已改成：**先落地、后校验**，直接 `write` 这个外壳就行：
+
+```html
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>—</title>
+<link id="skin" rel="stylesheet" href="presets/soft.css"></head><body>
+<div class="page"><div id="sm-masthead"></div><div id="sm-content"></div><div id="sm-receipt"></div></div>
+<script>window.SHOWME_SHAPE = 'review'</script>
+<script src="templates/core.js"></script></body></html>
 ```
+
+`'review'` 换成 `'pick'` / `'report'` 就是另外两个形状。你引用的 `core.js` 与 `presets/*.css`
+会在展示那一刻已经就位，浏览器取它们时一定存在。
+
+**想先把资产催出来**（例如要读 `templates/README.md`）：**随便调一次 `show_html`**，
+哪怕路径不存在——落地排在**校验之前**，失败也会跑。
 
 **文件名必须同名**：`mypage.html` ↔ `mypage.data.js`（内核按页面文件名推导）。
 
@@ -276,7 +290,7 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 213 项离线断言：宿主 76 / 客户端 33 / 预设 38 / 模板 29 / 页面 37
+npm test                # 216 项离线断言：宿主 79 / 客户端 33 / 预设 38 / 模板 29 / 页面 37
 
 # 装配是否真的生效 —— 对着运行中的 3080 打真实请求
 node test/live-probe.mjs <sessionId>
