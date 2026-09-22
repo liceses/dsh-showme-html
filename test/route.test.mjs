@@ -13,8 +13,10 @@ import { request as httpRequest, createServer } from 'node:http'
 import { existsSync } from 'node:fs'
 import { mkdtemp, mkdir, readFile, readdir, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir, homedir } from 'node:os'
-import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { join, dirname } from 'node:path'
+import { pathToFileURL, fileURLToPath } from 'node:url'
+
+const here = dirname(fileURLToPath(import.meta.url))
 
 /**
  * 找到本机 DSH 装的 `@deepseek-ai/dsh-tools`，用来借它的 JSON Schema 校验器。
@@ -610,5 +612,75 @@ const neverShown = await bareGet('/raw/never-shown/.dsh/showme/review.html')
 check('没展示过的会话仍然 404（不因为有了记录就放宽）', () => assert.equal(neverShown.status, 404))
 
 bareServer.close()
+
+// ── skill 投递兜底：链接在时不动，链接丢了就运行时注册顶上 ──────────────
+console.log('\n[skill] 投递兜底')
+
+const { parseSkillFile, installSkillFallback } = (await import('../lib/index.js')).__internals
+const realSkill = await readFile(join(here, '..', 'skill', 'showme-report', 'SKILL.md'), 'utf8')
+
+check('frontmatter 能被拆出来', () => {
+  const { meta, body } = parseSkillFile(realSkill)
+  assert.equal(meta.name, 'showme-report')
+  assert.ok(meta.description.length > 20, 'description 太短，多半没解析到')
+  assert.ok(meta.whenToUse.length > 10, 'whenToUse 没解析到')
+  assert.ok(!body.startsWith('---'), '正文里还留着 frontmatter 分隔符')
+  assert.match(body, /^#\s/m, '正文应当从标题开始')
+})
+
+check('没有 frontmatter 时退化为全文，不抛', () => {
+  const { meta, body } = parseSkillFile('# 裸文件\n\n正文')
+  assert.deepEqual(meta, {})
+  assert.equal(body, '# 裸文件\n\n正文')
+})
+
+/**
+ * 造一个假 ctx。
+ * @param withRegistry - 是否提供 skills 服务。
+ */
+function fakeSkillCtx(withRegistry) {
+  const calls = []
+  return {
+    calls,
+    ctx: {
+      effect: (fn) => {
+        fn()
+        return () => {}
+      },
+      get: (key) =>
+        withRegistry && key === 'skills'
+          ? { register: (skill) => { calls.push(skill); return () => {} } }
+          : undefined,
+    },
+  }
+}
+
+const linkedHome = await mkdtemp(join(tmpdir(), 'dsh-home-linked-'))
+await mkdir(join(linkedHome, 'skills', 'showme-report'), { recursive: true })
+await writeFile(join(linkedHome, 'skills', 'showme-report', 'SKILL.md'), realSkill, 'utf8')
+
+const ctxWithLink = fakeSkillCtx(true)
+check('链接在 → 什么都不做（保住热发现）', () => {
+  assert.equal(installSkillFallback(ctxWithLink.ctx, linkedHome), 'skipped-linked')
+  assert.equal(ctxWithLink.calls.length, 0, '链接在时不该注册，否则热发现会被静态内容盖掉')
+})
+
+const bareHome = await mkdtemp(join(tmpdir(), 'dsh-home-bare-'))
+const ctxWithoutLink = fakeSkillCtx(true)
+check('链接丢了 → 运行时注册顶上', () => {
+  assert.equal(installSkillFallback(ctxWithoutLink.ctx, bareHome), 'registered')
+  assert.equal(ctxWithoutLink.calls.length, 1)
+  const skill = ctxWithoutLink.calls[0]
+  assert.equal(skill.name, 'showme-report')
+  assert.equal(skill.source, 'runtime')
+  assert.ok(skill.description.length > 20)
+  assert.match(skill.content, /^#\s/m, '注册的应当是正文，不该带 frontmatter')
+  assert.equal(skill.resourceBase.kind, 'directory')
+})
+
+const noRegistry = fakeSkillCtx(false)
+check('没有 skills 服务 → 安静放弃，不抛', () =>
+  assert.equal(installSkillFallback(noRegistry.ctx, bareHome), 'unavailable'),
+)
 
 console.log(`\n全部通过：${checks} 项断言。\n`)

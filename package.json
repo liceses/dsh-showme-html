@@ -26,7 +26,9 @@
     "test",
     "cordis.patch.yml",
     "README.md",
-    "skill"
+    "skill",
+    "styles",
+    "templates"
   ],
   "scripts": {
     "test": "node test/route.test.mjs && node test/client-bundle.test.mjs && node test/presets.test.mjs && node test/templates.test.mjs && node test/page-smoke.test.mjs",
@@ -35,6 +37,7 @@
     "test:presets": "node test/presets.test.mjs",
     "test:templates": "node test/templates.test.mjs",
     "test:page": "node test/page-smoke.test.mjs",
+    "doctor": "node test/doctor.mjs",
     "probe": "node test/live-probe.mjs"
   },
   "keywords": [

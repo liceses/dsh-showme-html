@@ -113,6 +113,17 @@ New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\skills\showme-report" `
          -Target "<本目录绝对路径>\skill\showme-report"
 ```
 
+> **这个联接是可选的。** 插件在启动时会检查它：**在，就什么都不做**（让文件系统 provider
+> 继续提供"改完 SKILL.md 立刻生效"的热发现）；**不在，就用 `ctx.skills.register()`
+> 运行时注册兜底**，保证装了这个插件就有这个 skill。
+>
+> 之所以做这层兜底：联接在仓库之外，任何一次清理都可能把它悄悄弄丢，
+> 而症状只是"模型不再加载 skill"，从外面完全看不出来。想知道它还在不在：
+
+```powershell
+npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / 运行中的路由
+```
+
 > 没有构建步骤：`lib/` 就是成品，仓库里没有"编译产物"这一层。
 
 ---
@@ -290,7 +301,9 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 216 项离线断言：宿主 79 / 客户端 33 / 预设 38 / 模板 29 / 页面 37
+npm test                # 221 项离线断言：宿主 84 / 客户端 33 / 预设 38 / 模板 29 / 页面 37
+
+npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由
 
 # 装配是否真的生效 —— 对着运行中的 3080 打真实请求
 node test/live-probe.mjs <sessionId>
