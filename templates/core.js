@@ -64,10 +64,32 @@
     return Array.isArray(value) ? value : []
   }
 
-  /** 页面文件名 → 数据文件名（同目录、同名、`.data.js`）。 */
+  /**
+   * 页面文件名 → 数据文件名（同目录、同名、`.data.js`）。
+   *
+   * 基准用 `document.baseURI`：页面里若声明了 `<base href>`，真实位置在它身上；
+   * 没有 base 时它就等于 `location`。
+   */
   function dataFileName() {
-    var last = decodeURIComponent((location.pathname.split('/').pop() || '').trim())
+    var source = String(document.baseURI || location.href || '')
+    source = source.split('#')[0].split('?')[0]
+    var last = decodeURIComponent((source.split('/').pop() || '').trim())
     return last.replace(/\.html?$/i, '') + '.data.js'
+  }
+
+  /**
+   * 这一页是不是跑在"地址里没有文件名"的宿主里。
+   *
+   * 实测（2026-09-26）：dsh 的**原生文档预览**把 HTML 塞进一个 blob iframe
+   * （`URL.createObjectURL(new Blob([html]))`），地址那一串是 blob 的 uuid ——
+   * 于是"按自己的文件名推导数据文件"必然失败，报出来的名字就是一个 uuid。
+   * 这不是页面写错了，是那种宿主天生给不了文件名。
+   * @returns true 表示推导不可靠。
+   */
+  function urlHasNoFileName() {
+    var protocol = String(location.protocol || '')
+    if (protocol === 'blob:' || protocol === 'data:') return true
+    return /^about:/.test(String(location.href || ''))
   }
 
   // ══════════════ 失败态：一律给"怎么办"，不白屏 ══════════════
@@ -404,11 +426,24 @@
     sync()
   }
 
-  /** 启动：加载同名数据文件并渲染。 */
+  /** 启动：拿到数据（静态引入或按同名推导）并渲染。 */
   function boot() {
     var style = document.createElement('style')
     style.textContent = CONTROL_CSS
     document.head.appendChild(style)
+
+    // 第一条路：数据已经由页面**静态**引入（<script src="x.data.js"> 排在 core.js 之前）。
+    // 这条路在原生文档预览里也能活 —— 它会把文档里的静态 script 打包进那个 blob。
+    if (window.SHOWME !== null && typeof window.SHOWME === 'object') {
+      try {
+        render(window.SHOWME)
+      } catch (error) {
+        fail('渲染出错：' + (error && error.message ? error.message : String(error)), [
+          '多半是数据的字段写错了；对照 skill §5 的字段表核对一遍。',
+        ])
+      }
+      return
+    }
 
     var name = dataFileName()
     var script = document.createElement('script')
@@ -430,6 +465,18 @@
       }
     }
     script.onerror = function () {
+      // 宿主给不出文件名时，别把"页面写错了"这口锅甩给作者 —— 说清是哪条路走岔了。
+      if (urlHasNoFileName()) {
+        fail('这个宿主里读不到数据文件：' + name, [
+          '这一页正跑在<b>原生文档预览</b>里：它把 HTML 塞进 blob iframe，地址里没有文件名，' +
+            '于是 <code>foo.html</code> ↔ <code>foo.data.js</code> 这条推导失效了（你看到的那个名字是一串 uuid）。',
+          '改用卡片的<code>侧栏打开</code>或<code>浏览器打开</code> —— 那两条路走宿主镜像路由，地址里有真实文件名。',
+          '要让这一页在原生文档预览里也能起来：把数据改成<b>静态引入</b>，' +
+            '在 <code>&lt;script src="templates/core.js"&gt;</code> <b>之前</b>加一行 ' +
+            '<code>&lt;script src="页面名.data.js"&gt;&lt;/script&gt;</code>。',
+        ])
+        return
+      }
       fail('没找到数据文件：' + name, [
         '数据文件必须和页面<strong>同名同目录</strong>：<code>foo.html</code> ↔ <code>foo.data.js</code>。',
         '用 <code>write</code> 把数据写到 <code>.dsh/showme/' + esc(name) + '</code>。',

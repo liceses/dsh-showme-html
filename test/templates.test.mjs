@@ -65,15 +65,24 @@ function makeElement(id) {
  * @param shape - review / pick / report。
  * @param data - 数据文件内容（null 表示"数据文件不存在"）。
  * @param pageName - 页面文件名。
+ * @param options - `{ host }`：`'mirror'`（默认，镜像路由，地址里有文件名）、
+ *   `'blob'`（原生文档预览那种 blob iframe，地址里只有 uuid）、
+ *   `'static'`（数据由页面静态引入，内核不该再去取数据文件）。
  */
-async function run(shape, data, pageName = 'demo.html') {
+async function run(shape, data, pageName = 'demo.html', options = {}) {
   const elements = new Map()
   const messages = []
   const appended = []
+  const host = options.host ?? 'mirror'
+  const mirrorUrl = `http://127.0.0.1:19387/api/showme/raw/sid/.dsh/showme/${pageName}`
+  const blobUrl = 'blob:http://127.0.0.1:19387/94d45dc1-3935-4e40-b3fc-57931b1d5350'
+  const url = host === 'blob' ? blobUrl : mirrorUrl
 
   const document = {
     title: '',
     readyState: 'complete',
+    // 真 document 一定有 baseURI；没有 <base> 时它就等于 location.href。
+    baseURI: url,
     getElementById(id) {
       if (!elements.has(id)) elements.set(id, makeElement(id))
       return elements.get(id)
@@ -106,7 +115,14 @@ async function run(shape, data, pageName = 'demo.html') {
     parent: { postMessage: (message) => messages.push(message) },
     SHOWME_SHAPE: shape,
   }
-  const location = { pathname: `/api/showme/raw/sid/.dsh/showme/${pageName}` }
+  // 静态引入那条路：数据在 core.js 跑之前就已经在 window 上了。
+  if (host === 'static') window.SHOWME = data
+
+  const location = {
+    href: url,
+    protocol: host === 'blob' ? 'blob:' : 'http:',
+    pathname: host === 'blob' ? '/94d45dc1-3935-4e40-b3fc-57931b1d5350' : `/api/showme/raw/sid/.dsh/showme/${pageName}`,
+  }
 
   const context = vm.createContext({ window, document, location, navigator: {}, console, Object, Array, String })
   new vm.Script(source, { filename: 'core.js' }).runInContext(context)
@@ -120,6 +136,7 @@ async function run(shape, data, pageName = 'demo.html') {
     words: elements.get('sm-words'),
     messages,
     document,
+    appended,
   }
 }
 
@@ -285,6 +302,33 @@ check('给出"没找到数据文件"与文件名', () => {
 check('说明里给出了怎么办', () => {
   assert.match(missing.content.innerHTML, /同名同目录/)
 })
+
+// ── 两条"宿主给不出文件名"与"静态引入"的现场回归（2026-09-26）──
+// 现场：点「原生预览」把页面交给原生文档预览后，报"没找到数据文件：<blob uuid>.data.js"。
+// 原因：原生文档预览把 HTML 塞进 blob iframe，地址里没有文件名。
+// 内核不该把这件事说成"页面写错了"，而且静态引入的数据必须能直接吃。
+console.log('\n[宿主差异] blob 宿主 vs 静态引入')
+
+const blobHost = await run('review', null, 'demo.html', { host: 'blob' })
+check('blob 宿主里不再甩锅给作者：说明是宿主给不了文件名', () => {
+  const html = blobHost.content.innerHTML
+  assert.match(html, /原生文档预览/)
+  assert.match(html, /blob/)
+  assert.match(html, /侧栏打开|浏览器打开/)
+})
+check('blob 宿主里不再吩咐作者去 write 那个 uuid 名字的数据文件', () => {
+  assert.doesNotMatch(blobHost.content.innerHTML, /把数据写到/)
+  assert.doesNotMatch(blobHost.content.innerHTML, /同名同目录/)
+})
+
+const staticHost = await run('review', { skin: 'soft', title: '静态引入', sections: [] }, 'demo.html', { host: 'static' })
+check('数据静态引入时：不再去取数据文件（只注入了样式）', () => {
+  const scripts = staticHost.appended.filter((element) => element.attributes?.src !== undefined)
+  assert.equal(scripts.length, 0, '静态引入时内核还在动态取数据文件')
+})
+check('数据静态引入时：照样渲染出标题', () =>
+  assert.match(staticHost.head.innerHTML, /静态引入/),
+)
 
 console.log('\n[文档] README 必须覆盖内核真正认的东西')
 

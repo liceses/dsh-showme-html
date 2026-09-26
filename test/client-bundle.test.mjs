@@ -141,6 +141,8 @@ const fakeWindow = {
   },
   addEventListener: windowTarget.addEventListener,
   removeEventListener: windowTarget.removeEventListener,
+  // 浏览器里一定有这两个；"侧栏打开"要把镜像地址绝对化，靠的就是它们。
+  location: { href: 'http://localhost/session/s' },
   focus: () => {
     focusCalls.count += 1
   },
@@ -159,7 +161,7 @@ const fakeDocument = {
   removeEventListener: documentTarget.removeEventListener,
 }
 
-const context = vm.createContext({ window: fakeWindow, document: fakeDocument, console })
+const context = vm.createContext({ window: fakeWindow, document: fakeDocument, console, URL })
 new vm.Script(source, { filename: 'lib/client.js' }).runInContext(context)
 
 console.log('\n[装载]')
@@ -176,10 +178,24 @@ const internals = plugin.__internals
 /** 记录槽位注册。 */
 const injections = []
 const registrations = []
+/** 记录 `ctx.inject([服务...])`（可选能力的接线，与槽位注入不是一回事）。 */
+const serviceInjections = []
+/** 记录右栏导航调用。 */
+const openTabCalls = []
+/** 右栏导航入口：默认可用；用例可以临时拿掉它验证兜底。 */
+const fakeSidebarRight = {
+  openTab: (kind, options) => {
+    openTabCalls.push({ kind, options })
+  },
+}
 const fakeCtx = {
   effect: (fn) => {
     const disposer = fn()
     return typeof disposer === 'function' ? disposer : () => {}
+  },
+  inject: (deps, callback) => {
+    serviceInjections.push(deps)
+    callback({ effect: fakeCtx.effect, slots: fakeCtx.slots, sidebarRightTabs: fakeSidebarTabs, sidebarRight: fakeSidebarRight })
   },
   slots: {
     inject: (name, callback) => {
@@ -192,6 +208,15 @@ const fakeCtx = {
     },
   },
 }
+/** 记录 tab 类型注册。 */
+const tabTypeRegistrations = []
+const fakeSidebarTabs = {
+  register: (definition) => {
+    tabTypeRegistrations.push(definition)
+    return () => {}
+  },
+  get: () => undefined,
+}
 
 plugin.apply(fakeCtx)
 
@@ -202,8 +227,35 @@ check('注册了插件样式', () => {
   assert.equal(styles[0].dataset.plugin, 'dsh-showme-html')
 })
 check('三处 inject 的目标槽位都对', () =>
-  assert.deepEqual(injections, ['tool.call.toolview', 'shell.overlay', 'conversation.input.left']),
+  assert.deepEqual(injections, [
+    'tool.call.toolview',
+    'shell.overlay',
+    'conversation.input.left',
+    'sidebar.right.pane.tab',
+  ]),
 )
+check('右栏那两个服务是按「可选能力」接的，不在 exports.inject 里', () => {
+  assert.deepEqual(plain(serviceInjections), [['sidebarRightTabs', 'sidebarRight']])
+  assert.deepEqual(plain(plugin.inject), ['slots'], '插件本体不该硬依赖右栏服务')
+})
+check('注册了右栏的**页类型**：自己的 kind，且不认领任何后缀', () => {
+  assert.equal(tabTypeRegistrations.length, 1)
+  const definition = tabTypeRegistrations[0]
+  assert.equal(definition.id, internals.SIDEBAR_ID)
+  assert.equal(definition.kind, internals.SIDEBAR_KIND)
+  assert.equal(definition.multiple, true)
+  assert.equal(definition.priority, 'builtin')
+  assert.equal(typeof definition.title, 'function')
+  // 页类型不认领地址：没有 patterns / canOpen，才不会跟原生文档预览抢文件
+  assert.equal(definition.patterns, undefined)
+  assert.equal(definition.canOpen, undefined)
+})
+check('正文注册在 sidebar.right.pane.tab，key = 实现 id', () => {
+  const body = registrations.find((entry) => entry.registration.name === 'sidebar.right.pane.tab')
+  assert.ok(body !== undefined, '没有注册 sidebar.right.pane.tab')
+  assert.equal(body.registration.key, internals.SIDEBAR_ID)
+  assert.equal(typeof body.component, 'function')
+})
 check('工具卡片绑在 show_html 这个 key 上', () => {
   const card = registrations.find((entry) => entry.registration.name === 'tool.call.toolview')
   assert.ok(card !== undefined, '没有注册 tool.call.toolview')
@@ -468,10 +520,9 @@ check('客户端不注册、也不查询原生文档预览服务（所以不会�
       '真要做 P3，先在这里说清"只覆盖显式认领、且保住 builtin 默认"，再改这条断言。',
   )
   assert.doesNotMatch(code, /ctx\.get\(\s*['"]documentPreviews['"]\s*\)/)
-  assert.doesNotMatch(code, /sidebarRightTabs\s*\.\s*register/)
 })
 
-check('原生预览走的是座位标准 openFile，不是自己拼 dsh-resource:// 地址', () => {
+check('自己不拼任何 dsh-resource:// 地址（那是框架的东西）', () => {
   assert.doesNotMatch(
     code,
     /dsh-resource:\/\//,
@@ -479,64 +530,77 @@ check('原生预览走的是座位标准 openFile，不是自己拼 dsh-resource
   )
 })
 
-check('客户端只依赖 slots 这一项服务（缺原生预览包也不会停在 pending）', () =>
+check('右栏 tab 类型是「页类型」：没有 patterns / canOpen，不认领文件地址', () => {
+  const definition = tabTypeRegistrations[0]
+  assert.equal(definition.patterns, undefined, '一旦给了 patterns，就会跟原生文档预览抢文件')
+  assert.equal(definition.canOpen, undefined)
+})
+
+check('插件本体只硬依赖 slots（右栏服务缺失时卡片照旧可用）', () =>
   assert.deepEqual(plain(plugin.inject), ['slots']),
 )
 
-// ── P1「原生预览」：交给原生右栏，失败兜底到新标签页 ──
-console.log('\n[P1 原生预览] 交给右栏，失败有兜底')
+// ── P1「侧栏打开」：送进右栏我们自己的页类型；失败兜底到新标签页 ──
+// ⚠️ 现场教训（2026-09-26）：这一版**不再**把文件丢给原生文档预览。
+// 原生文档预览把 HTML 塞进 blob iframe、只打包相对 .js/.css，于是相对图片、
+// 下级页、以及"按自己文件名推导数据文件"全废 —— 用户看到的就是
+// "没找到数据文件：<blob uuid>.data.js"。右栏 Browser tab 也不行：
+// 它的地址校验明确拒绝 **DSH 应用自身 origin**，而镜像路由正在那个 origin 上。
+// 所以正解是自己注册页类型，正文渲染我们自己的镜像地址。
+console.log('\n[P1 侧栏打开] 送进右栏页类型，失败有兜底')
 
-const openNativePreview = internals.openNativePreview
+const openInSidebar = internals.openInSidebar
 
-check('openFile 可用：走右栏，不动新标签页', () => {
+check('右栏可用：openTab(kind, { params: { url, title } })，不动新标签页', () => {
   windowOpens.length = 0
-  let asked = null
-  const how = openNativePreview((path) => { asked = path }, '.dsh/showme/x.html', '/api/showme/raw/s/x.html')
+  openTabCalls.length = 0
+  const how = openInSidebar('http://x/api/showme/raw/s/.dsh/showme/x.html', '评审')
   assert.equal(how, 'sidebar')
-  assert.equal(asked, '.dsh/showme/x.html')
+  assert.deepEqual(plain(openTabCalls), [
+    {
+      kind: 'showme-page',
+      options: { params: { url: 'http://x/api/showme/raw/s/.dsh/showme/x.html', title: '评审' } },
+    },
+  ])
   assert.equal(windowOpens.length, 0)
 })
 
-check('openFile 不存在：兜底到新标签页（带 noopener）', () => {
+check('openTab 抛错（类型没注册上）：兜底到新标签页', () => {
   windowOpens.length = 0
-  const how = openNativePreview(undefined, '.dsh/showme/x.html', '/u')
-  assert.equal(how, 'window')
-  assert.deepEqual(plain(windowOpens), [{ url: '/u', target: '_blank', features: 'noopener,noreferrer' }])
-})
-
-check('openFile 同步抛错：兜底到新标签页', () => {
-  windowOpens.length = 0
-  const how = openNativePreview(() => { throw new Error('unregistered kind') }, '.dsh/showme/x.html', '/u')
-  assert.equal(how, 'window')
-  assert.equal(windowOpens.length, 1)
-})
-
-check('openFile 异步 reject（0.1.7 的真实失败形态）：事后兜底并回调', async () => {
-  windowOpens.length = 0
-  const lates = []
-  const how = openNativePreview(
-    async () => { throw new Error('nobody claims this address') },
-    '.dsh/showme/x.html',
-    '/u',
-    (late) => lates.push(late),
-  )
-  assert.equal(how, 'sidebar', '同步阶段只能先当作成功')
-  await new Promise((resolve) => setTimeout(resolve, 0))
-  assert.deepEqual(lates, ['window'])
-  assert.equal(windowOpens.length, 1)
-})
-
-check('连新标签页都开不了：返回 none，不抛', () => {
-  const saved = fakeWindow.open
-  delete fakeWindow.open
+  const saved = fakeSidebarRight.openTab
+  fakeSidebarRight.openTab = () => {
+    throw new Error('unregistered kind')
+  }
   try {
-    assert.equal(openNativePreview(undefined, '.dsh/showme/x.html', '/u'), 'none')
+    assert.equal(openInSidebar('/u', 'T'), 'window')
+    assert.equal(windowOpens.length, 1)
   } finally {
-    fakeWindow.open = saved
+    fakeSidebarRight.openTab = saved
   }
 })
 
-check('卡片头部长出了「原生预览」按钮', () => {
+check('地址为空：返回 none，不抛', () => {
+  windowOpens.length = 0
+  assert.equal(openInSidebar('', 'T'), 'none')
+  assert.equal(openInSidebar(undefined, 'T'), 'none')
+  assert.equal(windowOpens.length, 0)
+})
+
+check('连新标签页都开不了：返回 none，不抛', () => {
+  const savedSidebar = fakeSidebarRight.openTab
+  const savedOpen = fakeWindow.open
+  fakeSidebarRight.openTab = undefined
+  delete fakeWindow.open
+  try {
+    assert.equal(openInSidebar('/u', 'T'), 'none')
+  } finally {
+    fakeSidebarRight.openTab = savedSidebar
+    fakeWindow.open = savedOpen
+  }
+})
+
+check('卡片头部长出「侧栏打开」，点它把**绝对**地址交给右栏', () => {
+  openTabCalls.length = 0
   const tree = card({
     block: {
       kind: 'tool-result',
@@ -548,10 +612,33 @@ check('卡片头部长出了「原生预览」按钮', () => {
     sessionId: 's',
     openFile: () => {},
   })
-  const button = findElement(tree, (element) => element.type === 'button' && textOf(element) === '原生预览')
-  assert.ok(button !== null, '头部没有「原生预览」按钮')
+  const button = findElement(tree, (element) => element.type === 'button' && textOf(element) === '侧栏打开')
+  assert.ok(button !== null, '头部没有「侧栏打开」按钮')
   const head = findElement(tree, (element) => element.props?.className === 'dsh-showme-head')
   assert.ok(findElement(head, (element) => element === button) !== null, '按钮不在头部')
+
+  button.props.onClick()
+  assert.equal(openTabCalls.length, 1)
+  assert.equal(openTabCalls[0].kind, internals.SIDEBAR_KIND)
+  assert.match(openTabCalls[0].options.params.url, /^http:\/\/localhost\/api\/showme\/raw\/host\//)
+  assert.equal(openTabCalls[0].options.params.title, '评审')
+})
+
+check('右栏正文：按 tab 参数里的地址渲染 iframe；没参数时给一句话', () => {
+  const body = registrations.find((entry) => entry.registration.name === 'sidebar.right.pane.tab').component
+  const tree = body({
+    useTabInfo: () => ({
+      tab: { navigation: { params: { url: '/api/showme/raw/s/.dsh/showme/x.html', title: '评审' } } },
+    }),
+  })
+  const iframe = findElement(tree, (element) => element.type === 'iframe')
+  assert.ok(iframe !== null, '右栏正文没有 iframe')
+  assert.equal(iframe.props.src, '/api/showme/raw/s/.dsh/showme/x.html')
+  assert.equal(iframe.props.title, '评审')
+  assert.match(String(iframe.props.sandbox), /allow-scripts/)
+
+  const empty = body({ useTabInfo: () => ({ tab: { navigation: { params: {} } } }) })
+  assert.match(textOf(empty), /没有页面地址/)
 })
 
 // ── 全屏浮层的退出通道：2026-09-26 现场回归 ──
