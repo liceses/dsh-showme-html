@@ -11,15 +11,17 @@
     "./package.json": "./package.json"
   },
   "dsh": {
+    "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
     "client": {
-      "inject": [
-        "@deepseek-ai/dsh-client-runtime"
-      ],
+      "inject": [],
       "platform": "web"
     }
+  },
+  "engines": {
+    "dsh": "^0.1.7-rc.1"
   },
   "files": [
     "lib",
