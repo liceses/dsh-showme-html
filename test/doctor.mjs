@@ -176,9 +176,102 @@ try {
   warn(`连不上 127.0.0.1:${port}`, `${error.message} —— dsh web 没在跑，或端口不同（用 DSH_WEB_PORT 指定）`)
 }
 
+// ── 5. 客户端半区 ──────────────────────────────────────────────────────
+// 这一节补的是前四节的盲区：它们只看宿主的半区（路由 / 工具 / profile），
+// 看不到"浏览器到底拿没拿到前端的代码"。而客户端的 bundle 是由宿主
+// **编译进内存的模块图**里发布的（地址带 rev、`immutable` 缓存），
+// 光"文件在磁盘上"证明不了这件事。
+//
+// 宿主的 HMR 端点 `/plugins/events` 会把这份图推出来（SSE，第一帧就是 graph），
+// 照着它给的地址取一次，就能证明"发布得出去、也取得回来、而且是最新那份"。
+console.log('\n[5] 客户端半区（可选）')
+
+const clientBase = `http://127.0.0.1:${port}`
+
+/**
+ * 从 HMR 的 SSE 端点读一帧 graph，挑出本插件的条目。
+ * @param base - 实例根地址。
+ * @returns `{ entry }` 或 `{ error }`。
+ */
+async function readClientEntry(base) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 4000)
+  try {
+    const response = await fetch(`${base}/plugins/events`, {
+      headers: { accept: 'text/event-stream' },
+      signal: controller.signal,
+    })
+    if (!response.ok || response.body === null) return { error: `HTTP ${response.status}` }
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let text = ''
+    while (text.length < 500_000) {
+      const { value, done } = await reader.read()
+      if (done) break
+      text += decoder.decode(value, { stream: true })
+      if (text.includes('"dsh-showme-html"')) break
+    }
+    await reader.cancel().catch(() => {})
+    const frame = text
+      .split('\n')
+      .find((line) => line.startsWith('data: ') && line.includes('"dsh-showme-html"'))
+    if (frame === undefined) return { error: 'HMR 图里没有 dsh-showme-html —— 客户端半区没被发布' }
+    const entry = (JSON.parse(frame.slice('data: '.length)).graph?.entries ?? []).find(
+      (item) => item.id === 'dsh-showme-html',
+    )
+    return entry === undefined ? { error: 'graph 帧里没有本插件的条目' } : { entry }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+try {
+  const outcome = await readClientEntry(clientBase)
+  if (outcome.error !== undefined) {
+    warn(
+      `客户端半区没验成：${outcome.error}`,
+      '没挂 HMR 端点、或端口不同时会这样（用 DSH_WEB_PORT 指定端口）。',
+    )
+  } else {
+    console.log(`  ✓  宿主已把客户端半区发布给浏览器（rev ${outcome.entry.rev}）`)
+
+    // 图里的地址是**文档相对**的（/plugins/??<包名>/client.js&rev=…）。
+    const response = await fetch(new URL(`/${outcome.entry.url}`, clientBase), {
+      signal: AbortSignal.timeout(5000),
+    })
+    const bundle = await response.text()
+
+    check('按图给的地址能取到客户端 bundle', () => {
+      if (!response.ok) return `HTTP ${response.status}`
+      if (bundle.length === 0) return '取回了空 body'
+      return /__ModuleLoader__/.test(bundle) && /dsh-showme-html/.test(bundle)
+        ? true
+        : 'body 里既没有加载器也没有本插件的 id —— 多半取到了别的东西'
+    })
+
+    // 新鲜度：浏览器拿到的那一份，必须包含当前源码里每一个 dsh-showme-* 类名。
+    // 旧的 immutable 缓存、或没重建的构建产物，都会在这里现形。
+    const classNames = [
+      ...new Set((readText(join(repo, 'lib', 'client.js')) ?? '').match(/dsh-showme-[a-z0-9-]+/g) ?? []),
+    ]
+    check(`取回的 bundle 是当前源码那一份（${classNames.length} 个类名逐个核对）`, () => {
+      const missing = classNames.filter((name) => !bundle.includes(name))
+      return missing.length === 0
+        ? true
+        : `bundle 里缺 ${missing.join(' ')} —— 浏览器拿到的还是旧代码（刷新页面，或重启 dsh）`
+    })
+  }
+} catch (error) {
+  warn(`客户端半区没验成：${error instanceof Error ? error.message : String(error)}`, '取 bundle 失败不影响其它检查。')
+}
+
 console.log(
   failures === 0
     ? `\n体检通过${warnings > 0 ? `（${warnings} 条提醒）` : ''}。\n`
     : `\n${failures} 项不健康${warnings > 0 ? `，另有 ${warnings} 条提醒` : ''}。\n`,
 )
-process.exit(failures === 0 ? 0 : 1)
+// 用 exitCode 而不是 process.exit()：还有 keep-alive 连接在飞时强退，
+// Node 24 在 Windows 上会抛 UV_HANDLE_CLOSING 断言（live-probe 那里同样处理过）。
+process.exitCode = failures === 0 ? 0 : 1

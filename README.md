@@ -121,7 +121,7 @@ New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\skills\showme-report" `
 > 而症状只是"模型不再加载 skill"，从外面完全看不出来。想知道它还在不在：
 
 ```powershell
-npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / 运行中的路由
+npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / 客户端半区
 ```
 
 > 没有构建步骤：`lib/` 就是成品，仓库里没有"编译产物"这一层。
@@ -309,7 +309,7 @@ docs/                 需求演进与定稿方案
 ```powershell
 npm test                # 237 项离线断言：宿主 85 / 客户端 48 / 预设 38 / 模板 29 / 页面 37
 
-npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由
+npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区**
 
 # 装配是否真的生效 —— 对着运行中的实例打真实请求
 node test/live-probe.mjs <sessionId>
@@ -338,7 +338,24 @@ node test/live-probe.mjs <sessionId>
 |---|---|
 | `skill/showme-report/**` | **热发现，什么都不用做** |
 | `lib/index.js`（宿主半区） | **重启 `dsh web`**（改配置触发不了重载，实测三次都不行） |
-| `lib/client.js`（浏览器半区） | 重启后由 client-modules 扫描；之后改它需要浏览器 **F5** |
+| `lib/client.js`（浏览器半区） | **改完刷新一次页面就行**，不用重启 —— 机制见下 |
+
+浏览器半区为什么不用重启（2026-09-26 在 `@deepseek-ai/dsh-client-modules` 的实现里核实，
+并在运行的 Desktop 实例上验证）：
+
+- 宿主把每个 client bundle 编译进一份**内存模块图**，地址带 `rev`（由 bundle 的
+  mtime/ctime/size 算出，见 `artifactRevision`），响应用 `cache-control: immutable`；
+- bundle 的**字节是取响应时才从磁盘读的**（`lazyBody` → `readFileSync`），
+  所以就算地址没变，内容也是最新的；
+- 文件一变，宿主侧的 HMR 观察者调 `rebuilt(id)` → 算出新 `rev` → 经 SSE 端点
+  `/plugins/events` 把新地址推给浏览器（`@deepseek-ai/dsh-client-hmr`）。
+
+想知道"浏览器到底拿到哪一份"，不用猜：
+
+```powershell
+$env:DSH_WEB_PORT='19387'; npm run doctor   # [5] 客户端半区：读 HMR 图 + 按 rev 取回 bundle，
+                                            # 并逐个数当前源码里的 dsh-showme-* 类名是否都在
+```
 
 ### 写测试时的坑
 
