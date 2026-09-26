@@ -14,23 +14,50 @@ import vm from 'node:vm'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const source = await readFile(join(here, '..', 'lib', 'client.js'), 'utf8')
+/**
+ * 去掉注释后的源码。
+ *
+ * 静态门禁只该盯**代码**：本文件的注释里就写着「不注册 documentPreviews」
+ * 「框架的 dsh-resource 地址」这类反例说明，拿原文件去断言会咬到自己。
+ * @param text - 源码。
+ * @returns 去掉块注释与行注释的文本。
+ */
+function stripComments(text) {
+  return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '')
+}
+const code = stripComments(source)
 
 /** 断言计数。 */
 let checks = 0
+/** 异步用例（在文件末尾统一 await 收口）。 */
+const asyncChecks = []
 /**
- * 断言包装。
+ * 断言包装。用例体返回 thenable 时按异步用例登记，最后统一收口。
  * @param label - 用例名。
  * @param fn - 断言体。
  */
 function check(label, fn) {
   checks += 1
+  let result
   try {
-    fn()
-    console.log(`  ok   ${label}`)
+    result = fn()
   } catch (error) {
     console.error(`  FAIL ${label}`)
     throw error
   }
+  if (result !== null && typeof result === 'object' && typeof result.then === 'function') {
+    asyncChecks.push(
+      result.then(
+        () => console.log(`  ok   ${label}`),
+        (error) => {
+          console.error(`  FAIL ${label}`)
+          throw error
+        },
+      ),
+    )
+    return
+  }
+  console.log(`  ok   ${label}`)
 }
 
 // ── 假 react：createElement 造普通对象树；hooks 返回可用但惰性的值 ──
@@ -95,6 +122,9 @@ function recordingTarget(bucket) {
   }
 }
 
+/** 记录 window.open 的调用（P1 的兜底通道）。 */
+const windowOpens = []
+
 const windowTarget = recordingTarget(keyListeners.window)
 const documentTarget = recordingTarget(keyListeners.document)
 
@@ -113,6 +143,10 @@ const fakeWindow = {
   removeEventListener: windowTarget.removeEventListener,
   focus: () => {
     focusCalls.count += 1
+  },
+  open: (url, target, features) => {
+    windowOpens.push({ url, target, features })
+    return null
   },
 }
 
@@ -419,6 +453,107 @@ check('有 meta.url 时优先用宿主算的地址', () => {
 })
 check('反馈类型常量与文档一致', () => assert.equal(internals.FEEDBACK_TYPE, 'dsh-showme-feedback'))
 
+// ── P0 边界：原生预览是 html 的默认归宿，本插件不许认领后缀 ──
+// 计划文档里 P0 原本想要"运行时读 documentPreviews 注册表自检"。2026-09-26 在
+// app.asar 里核实：这个服务只暴露 register()，**没有**任何读取面（注册表是闭包里的
+// Map），所以运行时自检写不出来。改用静态门禁 + 行为门禁盯着这条边界。
+console.log('\n[P0 边界] 不认领任何后缀')
+
+check('客户端不注册、也不查询原生文档预览服务（所以不会抢 .html）', () => {
+  // 断言的是**调用**而不是那个词（并按上面的 code 去掉注释）。
+  assert.doesNotMatch(
+    code,
+    /documentPreviews\s*\.\s*register/,
+    '有人开始注册原生文档预览了 —— 那会把 .html 的默认归宿从原生 builtin 上抢走。' +
+      '真要做 P3，先在这里说清"只覆盖显式认领、且保住 builtin 默认"，再改这条断言。',
+  )
+  assert.doesNotMatch(code, /ctx\.get\(\s*['"]documentPreviews['"]\s*\)/)
+  assert.doesNotMatch(code, /sidebarRightTabs\s*\.\s*register/)
+})
+
+check('原生预览走的是座位标准 openFile，不是自己拼 dsh-resource:// 地址', () => {
+  assert.doesNotMatch(
+    code,
+    /dsh-resource:\/\//,
+    '地址语法（dsh-resource://file/session/<sessionId>/<path>）属于框架，插件自己拼迟早拼错。',
+  )
+})
+
+check('客户端只依赖 slots 这一项服务（缺原生预览包也不会停在 pending）', () =>
+  assert.deepEqual(plain(plugin.inject), ['slots']),
+)
+
+// ── P1「原生预览」：交给原生右栏，失败兜底到新标签页 ──
+console.log('\n[P1 原生预览] 交给右栏，失败有兜底')
+
+const openNativePreview = internals.openNativePreview
+
+check('openFile 可用：走右栏，不动新标签页', () => {
+  windowOpens.length = 0
+  let asked = null
+  const how = openNativePreview((path) => { asked = path }, '.dsh/showme/x.html', '/api/showme/raw/s/x.html')
+  assert.equal(how, 'sidebar')
+  assert.equal(asked, '.dsh/showme/x.html')
+  assert.equal(windowOpens.length, 0)
+})
+
+check('openFile 不存在：兜底到新标签页（带 noopener）', () => {
+  windowOpens.length = 0
+  const how = openNativePreview(undefined, '.dsh/showme/x.html', '/u')
+  assert.equal(how, 'window')
+  assert.deepEqual(plain(windowOpens), [{ url: '/u', target: '_blank', features: 'noopener,noreferrer' }])
+})
+
+check('openFile 同步抛错：兜底到新标签页', () => {
+  windowOpens.length = 0
+  const how = openNativePreview(() => { throw new Error('unregistered kind') }, '.dsh/showme/x.html', '/u')
+  assert.equal(how, 'window')
+  assert.equal(windowOpens.length, 1)
+})
+
+check('openFile 异步 reject（0.1.7 的真实失败形态）：事后兜底并回调', async () => {
+  windowOpens.length = 0
+  const lates = []
+  const how = openNativePreview(
+    async () => { throw new Error('nobody claims this address') },
+    '.dsh/showme/x.html',
+    '/u',
+    (late) => lates.push(late),
+  )
+  assert.equal(how, 'sidebar', '同步阶段只能先当作成功')
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  assert.deepEqual(lates, ['window'])
+  assert.equal(windowOpens.length, 1)
+})
+
+check('连新标签页都开不了：返回 none，不抛', () => {
+  const saved = fakeWindow.open
+  delete fakeWindow.open
+  try {
+    assert.equal(openNativePreview(undefined, '.dsh/showme/x.html', '/u'), 'none')
+  } finally {
+    fakeWindow.open = saved
+  }
+})
+
+check('卡片头部长出了「原生预览」按钮', () => {
+  const tree = card({
+    block: {
+      kind: 'tool-result',
+      call: { name: 'show_html', argsRaw: '{"path":".dsh/showme/x.html","title":"评审"}' },
+      isError: false,
+      meta: { bytes: 10, url: '/api/showme/raw/host/.dsh/showme/x.html' },
+      content: [],
+    },
+    sessionId: 's',
+    openFile: () => {},
+  })
+  const button = findElement(tree, (element) => element.type === 'button' && textOf(element) === '原生预览')
+  assert.ok(button !== null, '头部没有「原生预览」按钮')
+  const head = findElement(tree, (element) => element.props?.className === 'dsh-showme-head')
+  assert.ok(findElement(head, (element) => element === button) !== null, '按钮不在头部')
+})
+
 // ── 全屏浮层的退出通道：2026-09-26 现场回归 ──
 // dsh Desktop 主窗口在 Windows 上是 titleBarStyle:'hidden' + titleBarOverlay:{height:40}：
 // 右上角 40px 是**原生**窗口按钮，画在网页之上，z-index 盖不过去。
@@ -500,4 +635,5 @@ check('没进全屏时：不渲染、不监听', () => {
   assert.equal(keyListeners.window.length, 0)
 })
 
+await Promise.all(asyncChecks)
 console.log(`\n全部通过：${checks} 项断言。\n`)
