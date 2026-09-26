@@ -7,8 +7,17 @@
  * 跑法：
  *   node test/live-probe.mjs <sessionId> [工作区相对路径...]
  *
+ * ⚠️ `sessionId` 是**会话目录名**、带 `session-` 前缀（= 工具里的 `exec.agent.session.id`）：
+ *
+ *   ~/.dsh/sessions/--D-developing-xxx--/session-96f165a6-….v4/
+ *                                          ^^^^^^^^^^^^^^^^^^^ 这一段整段都是 id
+ *
+ * 只写裸 uuid 会拿到 `404 unknown session`（2026-09-26 实测踩到）。
+ * 另外：**必须先在那个会话里展示过一次页面**，宿主才记下「会话 → 工作区根」；
+ * 那条记录在内存里，所以 dsh 重启后旧会话 id 一律 404。
+ *
  * 例：
- *   node test/live-probe.mjs eec4016e-fa4a-4345-a3b7-4c0fe7f825af .dsh/showme/review.html
+ *   node test/live-probe.mjs session-96f165a6-4c2f-4db7-9a4f-2774b71fca90 .dsh/showme/review.html
  */
 
 const sessionId = process.argv[2]
@@ -20,7 +29,13 @@ if (sessionId === undefined || sessionId === '') {
 const base = process.env.DSH_WEB_BASE ?? 'http://127.0.0.1:3080'
 const prefix = `/api/showme/raw/${encodeURIComponent(sessionId)}/`
 
-/** 默认探针：一个展示页、一个相对引用的资源、一次越界尝试。 */
+/**
+ * 默认探针：一个展示页、一个相对引用的资源、一次越界尝试。
+ *
+ * ⚠️ 415 那条用 `LICENSE`（**没有**扩展名，不在服务表里）。
+ * 别拿 `package.json` 当"未登记类型"——`.json` 早就在 `CONTENT_TYPES` 里
+ * （页面要能取数据文件），实测返回 200。旧版探针写的就是它，于是**这一项永远红**。
+ */
 const targets = process.argv.length > 3
   ? process.argv.slice(3).map((path) => ({ label: path, path, expect: 200 }))
   : [
@@ -28,7 +43,7 @@ const targets = process.argv.length > 3
       { label: '相对引用的 SVG', path: '.dsh/showme/assets/arch.svg', expect: 200 },
       { label: '越界（../ 到工作区外）', path: '%2e%2e%2fdsh-text-drop%2fpackage.json', expect: 403 },
       { label: '不存在的文件', path: '.dsh/showme/nope.html', expect: 404 },
-      { label: '未登记类型', path: 'package.json', expect: 415 },
+      { label: '未登记类型（无扩展名）', path: 'LICENSE', expect: 415 },
     ]
 
 let failed = 0
@@ -61,4 +76,7 @@ for (const target of targets) {
 }
 
 console.log(failed === 0 ? '\n全部符合预期。\n' : `\n${failed} 项不符合预期。\n`)
-process.exit(failed === 0 ? 0 : 1)
+// 用 exitCode 而不是 process.exit()：Node 24 在还有 fetch 连接在飞时强退，
+// 会在 Windows 上抛出 `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`
+// —— 检查全绿也会看到这条吓人的崩溃（2026-09-26 实测）。
+process.exitCode = failed === 0 ? 0 : 1
