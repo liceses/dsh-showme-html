@@ -34,16 +34,36 @@ function check(label, fn) {
 }
 
 // ── 假 react：createElement 造普通对象树；hooks 返回可用但惰性的值 ──
+// `useEffect` 只**收集**回调，不自动执行：同一份假 react 要同时服务「卡片」
+// 与「全屏浮层」两组用例，自动跑副作用会把卡片的观察器也拉起来。
+// 需要副作用真的跑一次的用例，自己调 runEffects()。
+const pendingEffects = []
 const React = {
   createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
   useState: (initial) => [typeof initial === 'function' ? initial() : initial, () => {}],
-  useEffect: () => {},
+  useEffect: (fn) => {
+    pendingEffects.push(fn)
+  },
   useRef: () => ({ current: null }),
   useCallback: (fn) => fn,
   useMemo: (fn) => fn(),
   useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
 }
 const jsxRuntime = { jsx: React.createElement, jsxs: React.createElement, Fragment: 'Fragment' }
+
+/**
+ * 把挂起的副作用跑一遍，返回它们的清理函数。
+ * @returns 清理函数数组。
+ */
+function runEffects() {
+  const cleanups = []
+  while (pendingEffects.length > 0) {
+    const effect = pendingEffects.shift()
+    const cleanup = effect()
+    if (typeof cleanup === 'function') cleanups.push(cleanup)
+  }
+  return cleanups
+}
 
 /**
  * 跨 realm 归一化：`vm` 里造出来的对象/数组带着另一个 realm 的原型，
@@ -56,6 +76,28 @@ function plain(value) {
 
 /** 记录加载器交出去的模块。 */
 const loaded = { id: null, exports: null }
+/** 记录挂到 window / document 上的键盘监听（用来验证 Esc 通道）。 */
+const keyListeners = { window: [], document: [] }
+/** 记录 window.focus() 有没有被调用。 */
+const focusCalls = { count: 0 }
+
+/** 造一个记录型 event target。 */
+function recordingTarget(bucket) {
+  return {
+    addEventListener: (type, fn, capture) => {
+      if (type === 'keydown') bucket.push({ fn, capture })
+    },
+    removeEventListener: (type, fn, capture) => {
+      if (type !== 'keydown') return
+      const at = bucket.findIndex((entry) => entry.fn === fn && entry.capture === capture)
+      if (at >= 0) bucket.splice(at, 1)
+    },
+  }
+}
+
+const windowTarget = recordingTarget(keyListeners.window)
+const documentTarget = recordingTarget(keyListeners.document)
+
 const fakeWindow = {
   __ModuleLoader__: {
     load: ({ id, factory }) => {
@@ -67,8 +109,11 @@ const fakeWindow = {
       })
     },
   },
-  addEventListener: () => {},
-  removeEventListener: () => {},
+  addEventListener: windowTarget.addEventListener,
+  removeEventListener: windowTarget.removeEventListener,
+  focus: () => {
+    focusCalls.count += 1
+  },
 }
 
 /** 记录注入的样式。 */
@@ -76,6 +121,8 @@ const styles = []
 const fakeDocument = {
   createElement: () => ({ dataset: {}, textContent: '', remove: () => {} }),
   head: { appendChild: (element) => styles.push(element) },
+  addEventListener: documentTarget.addEventListener,
+  removeEventListener: documentTarget.removeEventListener,
 }
 
 const context = vm.createContext({ window: fakeWindow, document: fakeDocument, console })
@@ -371,5 +418,86 @@ check('有 meta.url 时优先用宿主算的地址', () => {
   assert.equal(anchor.props.href, '/api/showme/raw/host-side-id/.dsh/showme/x.html')
 })
 check('反馈类型常量与文档一致', () => assert.equal(internals.FEEDBACK_TYPE, 'dsh-showme-feedback'))
+
+// ── 全屏浮层的退出通道：2026-09-26 现场回归 ──
+// dsh Desktop 主窗口在 Windows 上是 titleBarStyle:'hidden' + titleBarOverlay:{height:40}：
+// 右上角 40px 是**原生**窗口按钮，画在网页之上，z-index 盖不过去。
+// 旧版把「退出全屏」放在头部右侧（margin-left:auto）→ 点不到；
+// 而焦点进了 iframe 之后 Esc 也过不来 → 用户只能重启 dsh。
+console.log('\n[全屏浮层] 退出通道不能被原生标题栏挡住')
+
+const css = styles[0].textContent
+const fullscreen = internals.FullscreenHost
+
+/** 进入全屏并返回渲染出的对象树。 */
+function renderFullscreen() {
+  internals.setFullscreen({
+    title: '评审',
+    workspacePath: '.dsh/showme/x.html',
+    url: '/api/showme/raw/s/.dsh/showme/x.html',
+  })
+  return fullscreen({})
+}
+
+check('浮层是画面内固定层，且明确接收指针事件', () => {
+  const tree = renderFullscreen()
+  assert.equal(tree.props.className, 'dsh-showme-fullscreen')
+  assert.match(css, /\.dsh-showme-fullscreen\s*\{[^}]*position:\s*fixed/)
+  assert.match(css, /\.dsh-showme-fullscreen\s*\{[^}]*pointer-events:\s*auto/)
+})
+
+check('退出按钮在**底部**条里，顶部头栏已被删掉', () => {
+  const tree = renderFullscreen()
+  const bar = findElement(tree, (element) => element.props?.className === 'dsh-showme-fullscreenBar')
+  assert.ok(bar !== null, '没有底部控件条')
+  const exit = findElement(bar, (element) => element.type === 'button' && /退出全屏/.test(textOf(element)))
+  assert.ok(exit !== null, '底部条里没有退出按钮')
+  assert.equal(
+    findElement(tree, (element) => /fullscreenHead/.test(String(element.props?.className ?? ''))),
+    null,
+    '顶部头栏又回来了（它会被原生窗口按钮挡住）',
+  )
+  assert.doesNotMatch(css, /fullscreenHead/)
+})
+
+check('底部条是贴底（border-top）而不是贴顶（border-bottom）', () => {
+  const rule = css.match(/\.dsh-showme-fullscreenBar\s*\{([^}]*)\}/)
+  assert.ok(rule !== null, '没有 .dsh-showme-fullscreenBar 规则')
+  assert.match(rule[1], /border-top:/)
+  assert.doesNotMatch(rule[1], /border-bottom:/)
+})
+
+check('退出按钮仍然写着 Esc 提示', () =>
+  assert.match(textOf(renderFullscreen()), /退出全屏 \(Esc\)/),
+)
+
+check('Esc 在 window 与 document 两处捕获阶段监听，退出后清理干净', () => {
+  pendingEffects.length = 0
+  const tree = renderFullscreen()
+  const cleanups = runEffects()
+  assert.equal(tree.props.className, 'dsh-showme-fullscreen')
+  assert.equal(keyListeners.window.length, 1)
+  assert.equal(keyListeners.document.length, 1)
+  assert.equal(keyListeners.window[0].capture, true)
+  assert.equal(keyListeners.document[0].capture, true)
+  assert.equal(focusCalls.count, 1, '打开时应该把焦点抢回父文档（否则 Esc 收不到）')
+
+  keyListeners.window[0].fn({ key: 'a', stopPropagation: () => {} })
+  assert.notEqual(internals.getFullscreen(), null, '非 Esc 键不该关掉全屏')
+  keyListeners.window[0].fn({ key: 'Escape', stopPropagation: () => {} })
+  assert.equal(internals.getFullscreen(), null)
+
+  for (const cleanup of cleanups) cleanup()
+  assert.equal(keyListeners.window.length, 0)
+  assert.equal(keyListeners.document.length, 0)
+})
+
+check('没进全屏时：不渲染、不监听', () => {
+  pendingEffects.length = 0
+  assert.equal(internals.getFullscreen(), null)
+  assert.equal(fullscreen({}), null)
+  assert.equal(runEffects().length, 0)
+  assert.equal(keyListeners.window.length, 0)
+})
 
 console.log(`\n全部通过：${checks} 项断言。\n`)
