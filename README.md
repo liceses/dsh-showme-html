@@ -1,6 +1,13 @@
-# dsh-showme-html
+# dsh-showme-html · 把成果摊开给你看
 
-> **让 agent 把成果摊开给你看，让你点着回话。**
+> **English**: A DeepSeek Harness plugin that renders a workspace HTML page inside the conversation as a card, and hands the user's per-item verdicts back to the agent as one line per item.
+
+![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
+![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
+
+> 让 agent 把成果摊开给你看，让你点着回话。
 
 DSH（DeepSeek Harness）插件。给 agent 一个快捷入口：把工作区里写好的 HTML 页直接展示在对话里；
 并让用户在页面上"点名 + 表态"产生的文本，**一行一条**地回到 agent 手里。
@@ -8,18 +15,88 @@ DSH（DeepSeek Harness）插件。给 agent 一个快捷入口：把工作区里
 仓库：<https://github.com/liceses/dsh-showme-html>
 
 ![showme-report 的展示卡片](docs/screenshots/overview.png)
-
-上图是一次真实交付，一屏里把三件事都拍到了：
-
-- **卡片头部** —— `show_html` 徽章、标题、体积，以及 刷新 / 全屏 / 浏览器打开；
-- **页面本体** —— 瑞士国际主义皮肤，顶部那排还能现场换皮肤（换的只是那一个 `<link>`）；
-- **底部的反馈条** —— `pain-markdown 补充` 就是用户在页面上点选之后，由**页面替他组织好**的一行回执。
-  他接着按「填入输入框」，这句话就追加进了对话输入框。
+*图 · 一次真实交付（示例页 `examples/promo.html`）—— 一屏里三件事都拍到了：**卡片头部**是 `show_html` 徽章、标题、体积，以及 刷新 / 全屏 / 浏览器打开；**页面本体**是瑞士国际主义皮肤，顶部那排还能现场换皮肤（换的只是那一个 `<link>`）；**底部反馈条**里的 `pain-markdown 补充` 就是用户在页面上点选之后，由**页面替他组织好**的一行回执 —— 接着按「填入输入框」，这句话就追加进了对话输入框。*
 
 ---
 
+## 快速开始
+
+### 一、装
+
+```powershell
+# 从 GitHub 直接装
+dsh plugin --profile web add "github:liceses/dsh-showme-html"
+
+# 或者从本地源码目录装（开发时用，改完源码好追踪）
+dsh plugin --profile web add "link:<本目录绝对路径>"
+
+# 两种方式都需要重启 dsh web 才生效（宿主半区在启动时装载）
+```
+
+配套的 `showme-report` skill 用一个目录联接挂进去，**热发现、不用重启**：
+
+```powershell
+New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\skills\showme-report" `
+         -Target "<本目录绝对路径>\skill\showme-report"
+```
+
+> **这个联接是可选的。** 插件在启动时会检查它：**在，就什么都不做**（让文件系统 provider
+> 继续提供"改完 SKILL.md 立刻生效"的热发现）；**不在，就用 `ctx.skills.register()`
+> 运行时注册兜底**，保证装了这个插件就有这个 skill。
+>
+> 之所以做这层兜底：联接在仓库之外，任何一次清理都可能把它悄悄弄丢，
+> 而症状只是"模型不再加载 skill"，从外面完全看不出来。想知道它还在不在：
+
+```powershell
+npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / 运行中的路由
+```
+
+> 没有构建步骤：`lib/` 就是成品，仓库里没有"编译产物"这一层。
+
+### 二、用：一次完整的使用长这样
+
+```
+1. agent 写完东西，按共用语义标记写一页 HTML，挑一套皮肤：
+
+     <link rel="stylesheet" href="presets/swiss.css">
+
+2. 调一次工具：
+
+     show_html({ path: ".dsh/showme/review.html",
+                 title: "设计评审",
+                 note: "挑一个变体" })
+
+3. 卡片直接出现在对话里 —— 不用去文件树里翻、不用切浏览器。
+   卡片头部：刷新 / 全屏 / 在浏览器打开原文件。
+
+4. 你在页面上点选、写备注；页面实时把它组织成一行一条的文本。
+
+5. 点「填入输入框」—— 追加到你已有的内容后面。或者直接选中复制。
+```
+
+**不新增任何常驻服务**：宿主就是 DSH 已经在跑的那个 web server；反馈在浏览器内完成。
+页面默认落在 `.dsh/showme/`（隐藏目录，不污染源码树、不进 git）。
+
 ---
 
+## 目录
+
+| 想了解 | 看这里 |
+| --- | --- |
+| 为什么需要它 | [它解决什么](#why) |
+| 它有哪些能力 | [核心能力](#features) |
+| 四套皮肤长什么样 | [四套预设样式](#presets) |
+| 想少写点代码 | [模板：三份骨架](#templates) |
+| 那个 skill 和插件什么关系 | [`showme-report` 与 DSH 的关系](#skill) |
+| 它到底怎么实现的 | [工作原理](#how) |
+| 页面里的脚本能干什么 | [安全模型](#security) |
+| 有什么坑 | [已知限制](#limits) |
+| 想改代码 | [仓库结构](#layout) · [开发](#dev) |
+| 许可 | [许可](#license) |
+
+---
+
+<a id="why"></a>
 ## 它解决什么
 
 ### 一、读完一屏 Markdown，你还是"没看见"
@@ -68,66 +145,7 @@ agent 干完一件大事，甩给你 200 行 Markdown。你读完了，但你没
 
 ---
 
-## 一次完整的使用长这样
-
-```
-1. agent 写完东西，按共用语义标记写一页 HTML，挑一套皮肤：
-
-     <link rel="stylesheet" href="presets/swiss.css">
-
-2. 调一次工具：
-
-     show_html({ path: ".dsh/showme/review.html",
-                 title: "设计评审",
-                 note: "挑一个变体" })
-
-3. 卡片直接出现在对话里 —— 不用去文件树里翻、不用切浏览器。
-   卡片头部：刷新 / 全屏 / 在浏览器打开原文件。
-
-4. 你在页面上点选、写备注；页面实时把它组织成一行一条的文本。
-
-5. 点「填入输入框」—— 追加到你已有的内容后面。或者直接选中复制。
-```
-
-**不新增任何常驻服务**：宿主就是 DSH 已经在跑的那个 web server；反馈在浏览器内完成。
-页面默认落在 `.dsh/showme/`（隐藏目录，不污染源码树、不进 git）。
-
----
-
-## 装
-
-```powershell
-# 从 GitHub 直接装
-dsh plugin --profile web add "github:liceses/dsh-showme-html"
-
-# 或者从本地源码目录装（开发时用，改完源码好追踪）
-dsh plugin --profile web add "link:<本目录绝对路径>"
-
-# 两种方式都需要重启 dsh web 才生效（宿主半区在启动时装载）
-```
-
-配套的 `showme-report` skill 用一个目录联接挂进去，**热发现、不用重启**：
-
-```powershell
-New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\skills\showme-report" `
-         -Target "<本目录绝对路径>\skill\showme-report"
-```
-
-> **这个联接是可选的。** 插件在启动时会检查它：**在，就什么都不做**（让文件系统 provider
-> 继续提供"改完 SKILL.md 立刻生效"的热发现）；**不在，就用 `ctx.skills.register()`
-> 运行时注册兜底**，保证装了这个插件就有这个 skill。
->
-> 之所以做这层兜底：联接在仓库之外，任何一次清理都可能把它悄悄弄丢，
-> 而症状只是"模型不再加载 skill"，从外面完全看不出来。想知道它还在不在：
-
-```powershell
-npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / 运行中的路由
-```
-
-> 没有构建步骤：`lib/` 就是成品，仓库里没有"编译产物"这一层。
-
----
-
+<a id="features"></a>
 ## 核心能力
 
 | | |
@@ -143,6 +161,7 @@ npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / �
 
 ---
 
+<a id="presets"></a>
 ## 四套预设样式
 
 放在插件包的 `styles/`，**宿主在你第一次展示页面时自动落到工作区**
@@ -156,6 +175,17 @@ npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / �
 | `swiss` | 瑞士国际主义 | 编辑部长文、结论多的分析、要权威感 |
 | `brutal` | 新野兽派 | 设计评审、多变体挑选、强指认感 |
 | `blueprint` | 蓝图 / 工程图 | 架构、数据流、时序、依赖关系 |
+
+![预设画廊 · 柔和现代](docs/screenshots/preset-gallery.png)
+*图 · 真实示例页 `examples/preset-gallery.html`（本地渲染，柔和现代 = 默认皮肤）—— 顶部那排就是换肤开关，页面上半部分是内容。*
+
+同一份标记，只换那个 `<link>` 指向的文件：
+
+![同一页换成新野兽派](docs/screenshots/preset-gallery-brutal.png)
+*图 · 同一页、同一份标记，皮肤换成 `brutal`（新野兽派）—— 黑粗边框、硬阴影、无圆角、品红强调。*
+
+![同一页换成蓝图](docs/screenshots/preset-gallery-blueprint.png)
+*图 · 再换成 `blueprint`（蓝图 / 工程图）—— 深蓝底 + 网格、青色线条、全等宽、虚线框。标记仍然一个字没动。*
 
 **四套吃同一套语义标记**（`.page` `.masthead` `.kicker` `.lead` `.section` `.card` `.cols`
 `.stat`/`.num` `.chips`/`.chip` `.btn` `.table` `.callout` `.evidence` `.timeline` `.kv`
@@ -174,6 +204,7 @@ npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / �
 
 ---
 
+<a id="templates"></a>
 ## 模板：三份骨架
 
 skill 用文字规定"回执怎么做"，模型每次都重新实现一遍，于是**控件位置、组句、通道时机反复出错**。
@@ -186,6 +217,9 @@ skill 用文字规定"回执怎么做"，模型每次都重新实现一遍，于
 | `review.html` | 逐项表态 | 一排条目，每条一个判定 + 备注。带图不带图都行。**最常用** |
 | `pick.html` | 候选挑选 | 单选 / 多选。封面选哪张、这几张素材留哪几个 |
 | `report.html` | 图文汇报 | 有图 / 表 / 时间线、不需要逐项表态；每小节一个轻回执 |
+
+![模板页 · review 形状](docs/screenshots/template-review.png)
+*图 · 真实示例页 `examples/template-demo.html`（数据来自同目录的 `template-demo.data.js`，皮肤由数据文件里的 `skin: 'swiss'` 指定）—— 每个可点名的条目都带 `同意 / 要改 / 不要` 与备注框，控件就长在它指的那样东西旁边。*
 
 **一页 = 外壳 + 内核 + 数据**，你只写最后那个：
 
@@ -234,10 +268,84 @@ templates/core.js        内核：渲染与交互全在这里，三个形状共�
 - **模板是可选骨架，不是形式强制**：架构图、时序图、长文分析不是"条目式"的形状，
   那就自己写——§3 的回执契约、§4 的通道、§5 的沙箱约束照样适用。
 
-`examples/` 里的 `template-demo.html` 是一个真实用例：外壳 **548 字节**，内容全在数据文件里。
+`examples/` 里的 `template-demo.html` 是一个真实用例：外壳 **567 字节**（就是上面那段），内容全在数据文件里。
 
 ---
 
+<a id="skill"></a>
+## `showme-report` 与 DSH 的关系
+
+这个仓库里有两样东西，**它们是同一件事的两半**：
+
+| | 是什么 | 住在哪 |
+|---|---|---|
+| 插件本体 | 工具 `show_html` + 镜像读路由 + 对话内卡片 + 四套预设 + 三份模板 | `lib/` `styles/` `templates/` |
+| skill `showme-report` | **教 agent 怎么写这一页**：功能契约、回执交换格式、沙箱坑 | `skill/showme-report/SKILL.md` |
+
+**DSH 的 skill 是"按需加载的说明书"**：平时不进上下文，模型判断该用时才读进来。
+所以这个 skill 不在 `lib/` 里，也不该在——它是给模型看的，不是给运行时跑的。
+
+投递走两条路，**刻意不同时提供同名 skill**：
+
+| 情况 | 插件做什么 | 结果 |
+|---|---|---|
+| `$DSH_HOME/skills/showme-report/SKILL.md` **存在**（你挂了目录联接） | 什么都不做 | `skipped-linked` —— 保留文件系统 provider 的"改完 SKILL.md 立刻生效"热发现 |
+| 上面那个**不在** | `ctx.skills.register({ name, description, whenToUse, source: 'runtime', content, resourceBase })` | `registered` —— 保证"装了这个插件就有这个 skill" |
+| 拿不到 `skills` 服务，或缺 frontmatter | 记一笔，不拖垮插件本体 | `unavailable` |
+
+**兜底不是锦上添花，是必需**：联接在仓库之外，任何一次清理都可能把它悄悄弄丢，
+而症状只是"模型不再加载 skill"——从外面完全看不出来。这个仓库**真的被咬过一次**。
+`npm run doctor` 的第 2 段就是专门盯这一环的（它还会比对联接两侧内容是否一致）。
+
+另外，`show_html` 的**工具描述本身**就写着"写页面之前先加载 `showme-report`"，
+而**工具结果里的 `hint`** 是兜底中的兜底：页面缺回执时，提醒随工具结果直接回到模型眼前——
+这条通道不依赖模型自觉去读 skill。
+
+---
+
+<a id="how"></a>
+## 工作原理
+
+一次 `show_html` 的时序（`lib/index.js`）：
+
+```
+① 工具被调用，拿到 path / title / note
+② 先落资产：styles/* → <工作区>/.dsh/showme/presets/，templates/* → .dsh/showme/templates/
+   （create-only；**排在所有校验之前**，所以"随便调一次"也能把资产催出来）
+③ 再校验：扩展名必须是 .html/.htm → 路径必须在工作区内（realpath 双重校验）→ 单页 ≤ 8 MiB
+④ 体检：扫页面本体 + 它引用的本地脚本 → 缺回执 / 缺 id / 引用不存在 → 拼成 hint
+⑤ 返回 { path, bytes, url, hint }，url 由**宿主**算好（逐段编码，保留目录结构）
+⑥ 卡片拿到 url，挂 iframe；hint 由 output.render 拼进工具结果给模型看
+```
+
+**为什么按目录结构镜像分发**：写页面的 agent 不需要知道任何 URL 前缀。
+`<img src="stills/a.png">`、同目录的 `.css` / `.js`、下级 `shot-f3.html` —— 照原样写就行。
+代价是多一条路由，收益是"页面可以像本地文件一样互相引用"，而且**同一个地址就是「在浏览器打开原文件」**。
+
+**路由契约**：
+
+| 路由 | 方法 | 说明 |
+|---|---|---|
+| `/api/showme/raw/<sessionId>/<工作区相对路径>` | GET | 按工作区目录结构分发；27 种扩展名的 MIME 白名单，表外 415；HTML 响应额外带 CSP `sandbox` |
+| `/api/showme/feedback` | POST | 追加一行到 `<工作区>/.dsh/showme/inbox.jsonl`（上限 256 KiB） |
+
+**反馈为什么有两条路，而且都"可以不做"**：
+
+1. **`postMessage` → 卡片**（默认路径）：页面把汇总文本发给父页面，卡片显示它并给一个
+   「填入输入框」按钮。这条最顺——它**追加**而不是覆盖你已经写了一半的草稿。
+2. **`POST /api/showme/feedback` → 落盘**：页面自己直连宿主，追加进 `inbox.jsonl`，
+   卡片显示"已落盘"。
+3. **兜底**：页面里那段**能鼠标选中、能 Ctrl+C 的文本**。
+
+第 3 条是"通用交换格式"：前两条都不实现，你也照样能把话带回来。
+所以体检对第 1 条的判定是"缺 `postMessage` 回传就提醒"——**只给可复制文本不算**。
+
+**资产是插件包里的原件，落地是 create-only**：`styles/index.json` 的 `default` 一行决定默认皮肤；
+你在工作区里改过的副本不会被覆盖。想恢复原件，删掉工作区那份再调一次 `show_html` 即可。
+
+---
+
+<a id="security"></a>
 ## 安全模型（两层，刻意不同）
 
 同一个地址，两种档位：
@@ -265,6 +373,7 @@ templates/core.js        内核：渲染与交互全在这里，三个形状共�
 
 ---
 
+<a id="limits"></a>
 ## 已知限制
 
 - **不缓存**：每次刷新都重读文件（故意的——页面会被反复改）。
@@ -280,6 +389,7 @@ templates/core.js        内核：渲染与交互全在这里，三个形状共�
 
 ---
 
+<a id="layout"></a>
 ## 仓库结构
 
 ```
@@ -298,10 +408,11 @@ docs/                 需求演进与定稿方案
 
 ---
 
+<a id="dev"></a>
 ## 开发
 
 ```powershell
-npm test                # 221 项离线断言：宿主 84 / 客户端 33 / 预设 38 / 模板 29 / 页面 37
+npm test                # 222 项离线断言：宿主 85 / 客户端 33 / 预设 38 / 模板 29 / 页面 37
 
 npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由
 
@@ -338,4 +449,7 @@ node test/live-probe.mjs <sessionId>
 
 ---
 
-MIT © 2026 liceses
+<a id="license"></a>
+## 许可
+
+MIT © 2026 liceses —— 完整声明见仓库根目录的 [`LICENSE`](LICENSE)（`package.json` 的 `license` 字段同样是 `MIT`）。
