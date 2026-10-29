@@ -106,6 +106,19 @@ dsh plugin --profile web add "link:<本目录绝对路径>"
 # 两种方式都需要重启 dsh web 才生效（宿主半区在启动时装载）
 ```
 
+> **支持的 DSH 版本**：`engines.dsh` 声明为 `^0.1.7-rc.1 || ^0.2.1-rc.1`，
+> 实测通过 `0.1.7-rc.2` 与 `0.2.1-rc.2`（宿主 + 浏览器两个半区都验过，见下面的「开发」一节）。
+> 这条声明是**硬门禁**：DSH 在安装和启动时会拿它跟自己的运行时版本比对，不匹配就拒绝装载
+> （`Plugin dsh-showme-html@<ver> is incompatible with dsh <ver>: requirements {"engines.dsh":"..."}`）。
+> 确实要在未声明的版本上试，用精确版本豁免放行：
+>
+> ```powershell
+> dsh plugin --profile web allow-version dsh-showme-html@<包版本> --dsh-version <DSH 版本> --accept-risk
+> ```
+>
+> 豁免只对**那一个** `包@版本 × DSH 版本` 生效，写进 profile 的 `compatibility.json`；
+> 升级 DSH 或改包版本号后要重新放行 —— 它是逃生舱，不是兼容承诺。
+
 配套的 `showme-report` skill 用一个目录联接挂进去，**热发现、不用重启**：
 
 ```powershell
