@@ -267,6 +267,65 @@ try {
   warn(`客户端半区没验成：${error instanceof Error ? error.message : String(error)}`, '取 bundle 失败不影响其它检查。')
 }
 
+// ── 6. 工作区里的落地副本 ──────────────────────────────────────────────
+// 前五节只看"插件装没装好"，看不到**工作区里那份副本新不新**。
+// 落地是 create-only（不覆盖你改过的文件），所以仓库改了模板文档之后，
+// 工作区那份会悄悄停在旧版——症状不是报错，而是文档教的是已废弃的流程。
+// 这个坑踩过两次，所以现在有断言盯着它。
+console.log('\n[6] 工作区里的落地副本（可选）')
+
+const workspaceRoot = resolve(process.env.DSH_WORKSPACE ?? process.cwd())
+const landedRoot = join(workspaceRoot, '.dsh', 'showme')
+
+/**
+ * 比较一组资产：仓库目录里的每个文件，落地副本在不在、内容一不一致。
+ * @param sourceDir - 仓库里的源目录。
+ * @param targetDir - 工作区里的落地目录。
+ * @param compareContent - 是否比对内容（false 时只查缺）。
+ * @returns 差异描述数组。
+ */
+function diffAssets(sourceDir, targetDir, compareContent) {
+  const files = readdirSync(sourceDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+  const drift = []
+  for (const file of files) {
+    const landed = readText(join(targetDir, file))
+    if (landed === undefined) {
+      drift.push(`${file}（缺）`)
+      continue
+    }
+    if (compareContent && landed !== readText(join(sourceDir, file))) drift.push(file)
+  }
+  return drift
+}
+
+if (!existsSync(landedRoot)) {
+  console.log(`  -  还没落地过（第一次 show_html 会创建 ${landedRoot}）`)
+} else {
+  console.log(`  工作区：${workspaceRoot}`)
+
+  const templateDrift = diffAssets(join(repo, 'templates'), join(landedRoot, 'templates'), true)
+  check(
+    'templates/ 落地副本与包内一致',
+    () =>
+      templateDrift.length === 0
+        ? true
+        : `落后/缺失：${templateDrift.join(' ')} —— 旧副本会教出已废弃的流程`,
+    'npm run assets:refresh',
+  )
+
+  const presetMissing = diffAssets(join(repo, 'styles'), join(landedRoot, 'presets'), false)
+  if (presetMissing.length > 0) {
+    warn(
+      `presets/ 缺 ${presetMissing.join(' ')}`,
+      '预设内容归你（不比对），缺文件时跑 npm run assets:refresh 补齐（已存在的不会被覆盖）。',
+    )
+  } else {
+    console.log('  ✓  presets/ 齐全（内容归你，不比对）')
+  }
+}
+
 console.log(
   failures === 0
     ? `\n体检通过${warnings > 0 ? `（${warnings} 条提醒）` : ''}。\n`

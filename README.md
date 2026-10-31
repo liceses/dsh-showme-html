@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.2.1-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -15,7 +15,7 @@ DSH（DeepSeek Harness）插件。给 agent 一个快捷入口：把工作区里
 仓库：<https://github.com/liceses/dsh-showme-html>
 
 ![showme-report 的展示卡片](docs/screenshots/overview.png)
-*图 · 一次真实交付（示例页 `examples/promo.html`）—— 一屏里三件事都拍到了：**卡片头部**是 `show_html` 徽章、标题、体积，以及 刷新 / 全屏 / 浏览器打开；**页面本体**是瑞士国际主义皮肤，顶部那排还能现场换皮肤（换的只是那一个 `<link>`）；**底部反馈条**里的 `pain-markdown 补充` 就是用户在页面上点选之后，由**页面替他组织好**的一行回执 —— 接着按「填入输入框」，这句话就追加进了对话输入框。*
+*图 · 一次真实交付（示例页 `examples/promo.html`）—— 一屏里三件事都拍到了：**卡片头部**是 `show_html` 徽章、标题、体积，以及 侧栏打开 / 刷新 / 全屏 / 浏览器打开；**页面本体**是瑞士国际主义皮肤，顶部那排还能现场换皮肤（换的只是那一个 `<link>`）；**底部反馈条**里的 `pain-markdown 补充` 就是用户在页面上点选之后，由**页面替他组织好**的一行回执 —— 接着按「填入输入框」，这句话就追加进了对话输入框。*
 
 ---
 
@@ -48,13 +48,14 @@ New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\skills\showme-report" `
 > 而症状只是"模型不再加载 skill"，从外面完全看不出来。想知道它还在不在：
 
 ```powershell
-npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / 客户端半区
+npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / 客户端半区 / 落地副本
 ```
 
 > 没有构建步骤：`lib/` 就是成品，仓库里没有"编译产物"这一层。
 
 > **支持的 DSH 版本**：`engines.dsh` 声明为 `^0.1.7-rc.1 || ^0.2.1-rc.1`，
-> 实测通过 `0.1.7-rc.2` 与 `0.2.1-rc.2`（宿主 + 浏览器两个半区都验过，见下面的「开发」一节）。
+> 实测通过 `0.1.7-rc.2`、`0.2.1-rc.2` 与 `0.2.1-rc.5`（宿主 + 浏览器两个半区都验过，
+> 见下面的「开发」一节）。
 > 这条声明是**硬门禁**：DSH 在安装和启动时会拿它跟自己的运行时版本比对，不匹配就拒绝装载
 > （`Plugin dsh-showme-html@<ver> is incompatible with dsh <ver>: requirements {"engines.dsh":"..."}`）。
 > 确实要在未声明的版本上试，用精确版本豁免放行：
@@ -438,18 +439,35 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 252 项离线断言：清单 7 / 宿主 85 / 客户端 52 / 预设 38 / 模板 33 / 页面 37
+npm test                # 253 项离线断言：清单 7 / 宿主 86 / 客户端 52 / 预设 38 / 模板 33 / 页面 37
 
-npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区**
+npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区** / 落地副本
 
 # 装配是否真的生效 —— 对着运行中的实例打真实请求
 node test/live-probe.mjs <sessionId>
 # sessionId 是**会话目录名**、带 session- 前缀：
 #   ~/.dsh/sessions/--<工作区路径转义>--/session-<uuid>/   ← 这一整段
-# 只写裸 uuid 会得到 404 unknown session；而且必须先在该会话里展示过一次页面
-# （那条「会话 → 工作区根」记录在内存里，dsh 重启即失效）。
-# 桌面端实例要指定端口：$env:DSH_WEB_BASE='http://127.0.0.1:19387'
+# 只写裸 uuid 会得到 404 unknown session。
+# 解析顺序：show_html 记下的根 → sessions.get() → sessionQuery.readSession()（读磁盘），
+# 所以 dsh 重启后旧会话**通常**仍能解析。真拿不到时，404 正文会带诊断串
+# （形如 `sessions.get=miss sessionQuery=no-cwd`），照着它查，别猜。
+# 桌面端实例要指定端口：$env:DSH_WEB_BASE='http://127.0.0.1:2785'
 ```
+
+### 核对宿主契约：`tools/`
+
+`tools/` 是开发期的小刀，**不进 npm 包**（`files` 里没有它）：
+
+```powershell
+node tools/asar-peek.mjs list 'dsh-client-ui-sidebar-right'   # 宿主到底有没有这个包
+node tools/asar-peek.mjs x .dsh/out 'dsh-client-ui-sidebar-right/lib/client.js'
+node tools/asar-scan.mjs titleBarOverlay 300 2                # 只知道字符串、不知道在哪个包
+npm run assets:refresh                                        # 同步工作区里的落地副本
+```
+
+详见 `tools/README.md`。这个插件的关键决定都落在宿主实现上——`sidebarRightTabs` 存不存在、
+`priority` 有几个值、`titleBarOverlay` 多高、`readSession()` 返回什么形状——
+而答案只在装好的 `app.asar` 里。与其猜，不如读。
 
 **零构建、零依赖**：`lib/index.js` 与 `lib/client.js` 就是成品，`package.json` 里没有任何
 `dependencies` / `devDependencies` / `peerDependencies`。
@@ -471,6 +489,9 @@ node test/live-probe.mjs <sessionId>
 | `lib/index.js`（宿主半区） | **重启 `dsh web`**（改配置触发不了重载，实测三次都不行） |
 | `lib/client.js`（浏览器半区） | **改完刷新一次页面就行**，不用重启 —— 机制见下 |
 
+> 宿主半区不热重载这件事 2026-11-01 又复核了一次：往 404 文案里插一个标记，改完 0/2/5 秒各探一次，
+> 响应里始终是旧文案（文件里标记在、响应里没有）。所以别指望"存盘就生效"。
+
 浏览器半区为什么不用重启（2026-09-26 在 `@deepseek-ai/dsh-client-modules` 的实现里核实，
 并在运行的 Desktop 实例上验证）：
 
@@ -484,15 +505,23 @@ node test/live-probe.mjs <sessionId>
 想知道"浏览器到底拿到哪一份"，不用猜：
 
 ```powershell
-$env:DSH_WEB_PORT='19387'; npm run doctor   # [5] 客户端半区：读 HMR 图 + 按 rev 取回 bundle，
-                                            # 并逐个数当前源码里的 dsh-showme-* 类名是否都在
+$env:DSH_WEB_PORT='2785'; npm run doctor   # [5] 客户端半区：读 HMR 图 + 按 rev 取回 bundle，
+                                           # 并逐个数当前源码里的 dsh-showme-* 类名是否都在
 ```
 
 ### 写测试时的坑
 
-桩必须照**真实契约**写。本项目就吃过一次：宿主测试的假 `sessions` 返回了 `{meta:{cwd}}`，
-而真实 `Session` 只有 `header.cwd`，于是**离线 46 项全绿、线上全红**。
-离线测试证明逻辑，`live-probe` 证明装配——两个都要。
+桩必须照**真实契约**写。这个坑本项目吃了两次：
+
+1. 宿主测试的假 `sessions` 返回了 `{meta:{cwd}}`，而真实 `Session` 只有 `header.cwd`，
+   于是**离线 46 项全绿、线上全红**。
+2. 假 `sessionQuery.readSession()` 返回 `{header:{cwd}}`，而 0.2.1-rc.5 真实返回
+   `{session:{cwd}, inheritedEventCount, events}` —— cwd 挂在 `session` 下。
+   症状更隐蔽：兜底链是 `sessions.get()` → `sessionQuery.readSession()`，
+   前者对没加载过的会话是 miss，于是整条链断掉、回 404；
+   而且**只在刚启动的进程上现形**——实例跑久了会话被热起来，症状自己消失。
+
+离线测试证明逻辑，`live-probe` 证明装配——两个都要，而且**换 DSH 版本就要重跑一遍**（对着新起的实例）。
 
 ---
 

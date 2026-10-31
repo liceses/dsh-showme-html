@@ -13,8 +13,14 @@
  *                                          ^^^^^^^^^^^^^^^^^^^ 这一段整段都是 id
  *
  * 只写裸 uuid 会拿到 `404 unknown session`（2026-09-26 实测踩到）。
- * 另外：**必须先在那个会话里展示过一次页面**，宿主才记下「会话 → 工作区根」；
- * 那条记录在内存里，所以 dsh 重启后旧会话 id 一律 404。
+ *
+ * 会话 → 工作区根的解析顺序是：`show_html` 记下的（内存）→ `sessions.get()`（本进程已加载的）
+ * → `sessionQuery.readSession()`（读磁盘，2026-11-01 起兼容 rc.5 的 `{ session: { cwd } }` 形状）。
+ * 所以重启后旧会话**通常**仍能解析；真拿不到时，404 正文会带诊断串
+ * （形如 `sessions.get=miss sessionQuery=no-cwd`），照着它查，别猜。
+ *
+ * ⚠️ 对着**新起的实例**跑：跑久了的实例会把会话热起来，`sessions.get()` 一命中，
+ * 0.2.1-rc.5 上那个"兜底读不到 cwd"的 bug 就看不出来了。
  *
  * 例：
  *   node test/live-probe.mjs session-96f165a6-4c2f-4db7-9a4f-2774b71fca90 .dsh/showme/review.html

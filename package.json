@@ -1,6 +1,6 @@
 {
   "name": "dsh-showme-html",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "DSH 插件：给 agent 一个快捷入口，把工作区里写好的 HTML 页直接展示在对话里（对话内卡片 / 画面内全屏 / 在浏览器打开原文件），并让用户在页面上产生的反馈快速回到 agent 手里。",
   "type": "module",
@@ -42,7 +42,10 @@
     "test:templates": "node test/templates.test.mjs",
     "test:page": "node test/page-smoke.test.mjs",
     "doctor": "node test/doctor.mjs",
-    "probe": "node test/live-probe.mjs"
+    "probe": "node test/live-probe.mjs",
+    "assets:refresh": "node tools/refresh-assets.mjs",
+    "asar:list": "node tools/asar-peek.mjs list",
+    "asar:scan": "node tools/asar-scan.mjs"
   },
   "keywords": [
     "deepseek-harness",

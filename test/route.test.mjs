@@ -100,6 +100,18 @@ const services = {
       return undefined
     },
   },
+  // 持久化会话的读取面。0.2.1-rc.5 的真实形状是
+  // `{ session: <克隆的 header>, inheritedEventCount, events }` —— cwd 挂在 `session` 下。
+  // 只认顶层 header 的写法在 rc.5 上会让路由对"本进程还没加载过"的会话回 404
+  // （2026-11-01 在真实实例上踩到，诊断串 `sessions.get=miss sessionQuery=no-cwd`）。
+  sessionQuery: {
+    readSession: async (id) => {
+      if (id === 'persisted-session') {
+        return { session: { cwd: workspace }, inheritedEventCount: 0, events: [] }
+      }
+      throw new Error(`no such session: ${id}`)
+    },
+  },
 }
 const fakeCtx = {
   effect: (fn) => {
@@ -230,6 +242,11 @@ check('未知会话 404，且不回落到全局根', () => {
 // 形状容忍：有的记录只有 meta.cwd，有的只有裸 cwd。
 const metaShape = await rawRequest(`${base}/raw/meta-session/.dsh/showme/review.html`)
 check('meta.cwd 形态也能解析', () => assert.equal(metaShape.status, 200))
+
+// 0.2.1-rc.5 的持久化会话形状：cwd 在 `session` 下，不是顶层 `header`。
+// 这条对应 2026-11-01 在真实 rc.5 实例上发现的 bug（非活跃会话全 404）。
+const persistedShape = await rawRequest(`${base}/raw/persisted-session/.dsh/showme/review.html`)
+check('rc.5 的 { session: header } 形态也能解析', () => assert.equal(persistedShape.status, 200))
 
 check('404 里带上解析到的工作区根（出错时最想知道的事）', () =>
   assert.match(missing.body, /workspace root:/),
