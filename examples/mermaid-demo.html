@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mermaid 演示</title>
+<style>
+  /* 这一页没有任何 JS —— 图由宿主注入的引导脚本渲染。 */
+  body { font: 15px/1.6 system-ui, sans-serif; margin: 0; padding: 24px; background: #0f1115; color: #e6e8ee; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.lead { color: #9aa3b2; margin: 0 0 20px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  figure { margin: 0; background: #171a21; border: 1px solid #262b36; border-radius: 10px; padding: 14px; }
+  figcaption { font-size: 13px; color: #9aa3b2; margin-bottom: 10px; }
+  .mermaid { background: #fff; border-radius: 8px; padding: 10px; }
+</style>
+</head><body>
+<h1>mermaid 渲染演示</h1>
+<p class="lead">四张好图。宿主在 show_html 返回前已经预检过语法；渲染完会导出 PNG。</p>
+<div class="grid">
+  <figure>
+    <figcaption>flowchart</figcaption>
+    <pre class="mermaid">
+graph TD;
+  A[调用 show_html] --> B{宿主预检};
+  B -->|通过| C[渲染成图];
+  B -->|语法错| D[这次调用失败];
+    </pre>
+  </figure>
+  <figure>
+    <figcaption>sequence</figcaption>
+    <pre class="mermaid">
+sequenceDiagram
+  participant U as 用户
+  participant H as show_html
+  participant C as 卡片
+  U->>H: 写一页带图的页面
+  H->>H: 预检每块 mermaid 语法
+  H->>C: 通过 → 页面进卡片
+  C-->>U: 渲染并导出 PNG
+    </pre>
+  </figure>
+  <figure>
+    <figcaption>state</figcaption>
+    <pre class="mermaid">
+stateDiagram-v2
+  [*] --> Draft
+  Draft --> Checked: show_html
+  Checked --> Draft: 语法错
+  Checked --> Shown: 预检通过
+  Shown --> [*]
+    </pre>
+  </figure>
+  <figure>
+    <figcaption>pie</figcaption>
+    <pre class="mermaid">
+pie title 断言分布
+  "宿主" : 116
+  "mermaid" : 32
+  "客户端" : 52
+  "其它" : 115
+    </pre>
+  </figure>
+</div>
+</body></html>

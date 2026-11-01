@@ -1,5 +1,62 @@
 # 变更记录
 
+## 0.2.2 — 2026-11-01
+
+**页面里可以直接写 mermaid 了；而且图写错时 `show_html` 会当场失败。**
+
+### 加
+
+- **mermaid 支持**。页面里写 `<pre class="mermaid">graph TD; A-->B</pre>` 就会渲染成图
+  （也认 `<div class="mermaid">`、`<code class="language-mermaid">`、`<pre data-mermaid>`）。
+  vendored 的是 mermaid **12.2.0** 的 `dist/mermaid.min.js`（5.49 MB，普通脚本），
+  由新路由 `GET /api/showme/vendor/mermaid.min.js` 发出，页面用 `<script src>` 加载 ——
+  展示页是不透明源，`fetch` 会被跨域拦，只有 `<script src>` 过得去；也不走 CDN。
+- **宿主侧语法预检**：`show_html` 返回**之前**，宿主把页面里每个 mermaid 块解析一遍。
+  图写错 → 这次工具调用直接失败，报错里是 mermaid 自己的 `Parse error on line N: … ^` 原文。
+  这就是"渲染报错 = 页面不通过"。
+  实现：把 vendored 的 mermaid 喂进 `node:vm`；没有真 DOM 时 dompurify 会退化成空壳，
+  流程图一解析就抛 `TypeError: Z1.addHook is not a function`，所以在**内存里**把
+  `Z1=Rsr()` 换成 stub（磁盘上的文件不动，浏览器拿到的仍是原版）。
+  首次加载 ~150 ms（每进程一次），每块 5–50 ms。补丁点由测试钉住：升级 mermaid 时会先红。
+- **渲染回执与截图**：页面渲染完把每张图导出 PNG，`postMessage` → 浏览器半区（同源）
+  `POST /api/showme/mermaid` → 落盘到 `<工作区>/.dsh/showme/mermaid/<页面名>.<序号>.png`
+  （另写 `<页面名>.json`；有失败再写 `<页面名>.errors.txt`）。
+  路径是**可预测**的，`show_html` 的结果里直接给出，模型渲染完 `read_image` 就能看见自己画的图。
+- 卡片头部新增 mermaid 徽标：全部渲染成功是 `mermaid ✓`，运行时失败是红色 `mermaid 失败 ×N`
+  （悬停看每张图的报错）。
+- 纯静态页（没有内联 `<script>`）不再被页面冒烟测试判失败 —— 带图的页面常常一行 JS 都不用写。
+
+### 为什么不用 `@mermaid-js/parser`
+
+试过（2.0.1）：它只覆盖 architecture / gitgraph / packet / pie / radar / treemap / wardley /
+cynefin / info / railroad / treeview / eventmodeling —— **没有 flowchart / sequence / class /
+state / er**，而这几个恰好是最常写的。所以舍掉。
+
+### 实测
+
+- 离线断言 **318 项全绿**（清单 7 / 宿主 116 / mermaid 35 / 客户端 52 / 预设 38 / 模板 33 / 页面 37）。
+  宿主的第 117 条是"软链接逃逸 403"——Windows 上建不出软链接时自动跳过，不是失败。
+- 预检覆盖的图类型：flowchart / sequence / class / state / er / pie / gantt / mindmap 各一条好图
+  全部通过；`graph TD; A-->` 这类坏图抛出带 `^` 指位的原文。
+
+### 文档
+
+- `vendor/README.md`：版本、sha256、为什么是单文件普通脚本、Node 侧为什么要打补丁、补丁点长什么样。
+- `npm run vendor:mermaid`（`tools/vendor-mermaid.mjs`）：重新拉取并覆盖 `vendor/mermaid.min.js`。
+- `SKILL.md` 新增 **§1.2**（怎么画、写错会失败、PNG 在哪、预检只管语法），TL;DR 与 `whenToUse` 各补一句。
+  **没有重编号**——`templates/core.js`、`templates/README.md`、`README.md` 都在引用 §5。
+- `templates/README.md` 新增"想画图：模板里没有图块，自己写页面"（含可直接抄的最小例子）。
+- `README.md`：版本徽章 0.2.2、新增 [mermaid](#mermaid) 一节与目录项、已知限制补三条、仓库结构补
+  `lib/mermaid-*.js` / `vendor/` / `tools/`、断言总数与分项同步。
+
+### 已知边界
+
+- 预检只查**语法**。运行时渲染错误（预检过了但浏览器里仍失败）拦不住已经返回的工具调用，
+  这类错误显示成页面里的红框 + 卡片徽标 + `<页面名>.errors.txt`。
+- JS 里动态拼出来的 mermaid 块不在预检范围内（宿主只扫静态 HTML）。
+- 页面超过 2 MB 时不注入引导脚本。
+- 原生文档预览（blob iframe）里没有 vendor 路由，图不会渲染 —— 用卡片 / 侧栏 / 全屏。
+
 ## 0.2.1 — 2026-11-01
 
 **修一个只在 DSH 0.2.1-rc.5 上现形的 bug；补上"落地副本"这条盲区。**

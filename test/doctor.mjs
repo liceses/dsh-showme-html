@@ -176,6 +176,30 @@ try {
   warn(`连不上 127.0.0.1:${port}`, `${error.message} —— dsh web 没在跑，或端口不同（用 DSH_WEB_PORT 指定）`)
 }
 
+// mermaid 的 vendor 路由：页面里的图靠它加载 mermaid（展示页是不透明源，
+// 只能用 `<script src>`，不能 fetch）。这一条断了的表现是"图永远是空白"，
+// 而且从插件日志里看不出来 —— 所以在这里钉一次字节数。
+try {
+  const response = await fetch(`http://127.0.0.1:${port}/api/showme/vendor/mermaid.min.js`, {
+    signal: AbortSignal.timeout(5000),
+  })
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  const expected = statSync(new URL('../vendor/mermaid.min.js', import.meta.url)).size
+  check(`vendor 路由可达：/api/showme/vendor/mermaid.min.js 与磁盘一致（${expected} 字节）`, () => {
+    if (response.status === 404) {
+      return `HTTP 404 —— 这个端口上的实例跑的还是 0.2.2 之前的插件：重启它，或用 DSH_WEB_PORT 指到已升级的实例`
+    }
+    if (response.status !== 200) return `HTTP ${response.status}`
+    if (!/^text\/javascript/.test(response.headers.get('content-type') ?? '')) {
+      return `content-type 不对：${response.headers.get('content-type')}`
+    }
+    if (bytes.length !== expected) return `发出来 ${bytes.length} 字节，磁盘上 ${expected} 字节`
+    return true
+  }, '插件是不是没升级？跑一次 npm test 看 vendor/mermaid.min.js 在不在。')
+} catch (error) {
+  warn(`vendor 路由没验成：${error.message}`, '连不上实例时正常，不影响其它检查。')
+}
+
 // ── 5. 客户端半区 ──────────────────────────────────────────────────────
 // 这一节补的是前四节的盲区：它们只看宿主的半区（路由 / 工具 / profile），
 // 看不到"浏览器到底拿没拿到前端的代码"。而客户端的 bundle 是由宿主

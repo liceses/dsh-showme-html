@@ -222,6 +222,48 @@ window.SHOWME = {
 
 ---
 
+## 想画图：模板里没有图块，自己写页面
+
+三份骨架都是**条目式**的：一排可点名、可表态的东西。数据里的 `text` 块是**转义文本**
+（`<b>` 会原样显示成尖括号），所以塞不进 HTML，也没有 `mermaid` 块 ——
+**这不是遗漏，是刻意的**：
+
+> `show_html` 会先把页面里**静态写着**的 mermaid 块解析一遍，语法错就让这次调用失败。
+> 而这个检查读的是页面文件本身；由 `core.js` 在浏览器里拼出来的块，它看不到。
+> 两边不一致（模板页能渲染坏图、手写页不能），比"模板不支持图"更难解释。
+
+所以：**要流程图 / 时序图 / 状态机，就自己写这一页**（不套模板）：
+
+```html
+<link rel="stylesheet" href="presets/blueprint.css">
+<div class="page">
+  <header class="masthead"><h1>调用链</h1></header>
+  <section class="section">
+<pre class="mermaid">
+sequenceDiagram
+  participant U as 用户
+  participant H as show_html
+  participant C as 卡片
+  U->>H: 写一页带图的页面
+  H->>H: 预检每块 mermaid 语法
+  H-->>U: 语法错 → 这次调用失败
+  H->>C: 通过 → 页面进卡片
+  C-->>U: 渲染并导出 PNG
+</pre>
+  </section>
+</div>
+```
+
+> 别缩进 `<pre>` 里的内容（正文要齐着左边写），图才不会带着前导空格。
+> 这一页没有 `window.SHOWME`，`templates/core.js` 也不需要引 —— 内核管的是条目与回执，
+> 不是图。要回执就照 skill §3 自己写一段内联 JS，或者另开一页用 `review` / `report` 骨架。
+> **混着用不行**：数据里的 `text` 块是转义文本，图进不去。
+
+图渲染完会自动导出 PNG 到 `.dsh/showme/mermaid/<页面名>.<序号>.png`，
+`show_html` 的返回值里就写着路径；想看自己画的图，`read_image` 打开它。
+
+---
+
 ## 常见错误
 
 | 症状 | 原因 |

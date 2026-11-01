@@ -561,6 +561,151 @@ for (const [args, context, pattern] of cases) {
 }
 check('六种非法输入都被拒绝并给出可行动文本', () => true)
 
+// ── mermaid：注入 / vendor / 回执 / 预检 ─────────────────────────────────
+// 这一组全部在**同一个 http server 还活着**的时候跑，所以放在 server.close() 之前。
+console.log('\n[mermaid] 注入与 vendor')
+
+const goodDiagram = '<!doctype html><html><body><pre class="mermaid">graph TD; A[开始] --> B[结束]</pre></body></html>'
+await writeFile(join(workspace, '.dsh', 'showme', 'diagram.html'), goodDiagram, 'utf8')
+
+const brokenDiagram = '<!doctype html><html><body><pre class="mermaid">graph TD; A--></pre></body></html>'
+await writeFile(join(workspace, '.dsh', 'showme', 'broken.html'), brokenDiagram, 'utf8')
+
+const injected = await rawRequest(raw('.dsh/showme/diagram.html'))
+check('含 mermaid 块的页面 200', () => assert.equal(injected.status, 200))
+check('注入了引导脚本（防重复注入的那行在）', () =>
+  assert.match(injected.body, /__showmeMermaidBoot/),
+)
+check('引导脚本在 </body> 之前', () => {
+  const at = injected.body.lastIndexOf('__showmeMermaidBoot')
+  assert.ok(at > 0 && at < injected.body.toLowerCase().lastIndexOf('</body>'))
+})
+check('注入后 content-length 与正文一致', () =>
+  assert.equal(Number(injected.headers['content-length']), Buffer.byteLength(injected.body)),
+)
+check('注入没有破坏 CSP sandbox', () => assert.match(injected.headers['content-security-policy'] ?? '', /sandbox/))
+
+const plainPage = await rawRequest(raw('.dsh/showme/review.html'))
+check('不含 mermaid 的页面与磁盘逐字节相同', () => assert.equal(plainPage.body, pageBody))
+check('不含 mermaid 的页面 content-length 仍是文件大小', () =>
+  assert.equal(Number(plainPage.headers['content-length']), Buffer.byteLength(pageBody)),
+)
+
+const vendor = await rawRequest(`${base}/vendor/mermaid.min.js`)
+check('vendor 路由 200', () => assert.equal(vendor.status, 200))
+check('vendor 是普通脚本', () => assert.match(vendor.headers['content-type'], /^text\/javascript/))
+check('vendor 可长期缓存', () => assert.match(vendor.headers['cache-control'] ?? '', /immutable/))
+check('vendor 正文非空且是 mermaid bundle', () => assert.ok(vendor.body.length > 1_000_000))
+const vendorBytes = await readFile(join(here, '..', 'vendor', 'mermaid.min.js'), 'utf8')
+check('vendor 发出的字节数等于文件大小', () => assert.equal(vendor.body.length, vendorBytes.length))
+
+const vendorHead = await rawRequest(`${base}/vendor/mermaid.min.js`, { method: 'HEAD' })
+check('vendor HEAD 200 且无正文', () => assert.equal(vendorHead.status, 200) && assert.equal(vendorHead.body, ''))
+
+const vendorMissing = await rawRequest(`${base}/vendor/nope.min.js`)
+check('白名单外的 vendor 文件名 404', () => assert.equal(vendorMissing.status, 404))
+
+const vendorTraversal = await rawRequest(`${base}/vendor/%2e%2e%2f%2e%2e%2fpackage.json`)
+check('vendor 里的穿越尝试不是 200', () => assert.notEqual(vendorTraversal.status, 200))
+
+console.log('\n[mermaid] 渲染回执')
+
+const onePixelPng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4])
+const receipt = {
+  sessionId: 'live-session',
+  page: '.dsh/showme/diagram.html',
+  ok: true,
+  diagrams: [{ index: 1, type: 'flowchart-v2', error: null, png: `data:image/png;base64,${onePixelPng.toString('base64')}` }],
+}
+const receiptResponse = await rawRequest(`${base}/mermaid`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify(receipt),
+})
+check('回执 200', () => assert.equal(receiptResponse.status, 200))
+check('回执里回报了落盘文件', () => assert.match(receiptResponse.body, /diagram\.1\.png/))
+
+const savedPng = await readFile(join(workspace, '.dsh', 'showme', 'mermaid', 'diagram.1.png')).catch(() => null)
+check('PNG 落盘且字节对得上', () => assert.ok(savedPng !== null) && assert.deepEqual([...savedPng], [...onePixelPng]))
+
+const savedJson = JSON.parse(
+  await readFile(join(workspace, '.dsh', 'showme', 'mermaid', 'diagram.json'), 'utf8').catch(() => 'null'),
+)
+check('回执 JSON 记下了图类型与 ok', () => {
+  assert.equal(savedJson.ok, true)
+  assert.equal(savedJson.diagrams[0].type, 'flowchart-v2')
+  assert.equal(savedJson.diagrams[0].png, '.dsh/showme/mermaid/diagram.1.png')
+})
+
+const failedReceipt = await rawRequest(`${base}/mermaid`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({
+    sessionId: 'live-session',
+    page: '.dsh/showme/diagram.html',
+    ok: false,
+    diagrams: [{ index: 1, type: 'flowchart-v2', error: 'boom from browser', png: null }],
+  }),
+})
+check('失败回执也 200（不是错误，是状态）', () => assert.equal(failedReceipt.status, 200))
+const errorsTxt = await readFile(join(workspace, '.dsh', 'showme', 'mermaid', 'diagram.errors.txt'), 'utf8').catch(() => '')
+check('失败时写下 errors.txt', () => assert.match(errorsTxt, /boom from browser/))
+
+const unknownReceipt = await rawRequest(`${base}/mermaid`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ sessionId: 'no-such-session', page: 'x.html', ok: true, diagrams: [] }),
+})
+check('未知会话的回执 404', () => assert.equal(unknownReceipt.status, 404))
+
+const notPost = await rawRequest(`${base}/mermaid`)
+check('回执路由 GET → 405', () => assert.equal(notPost.status, 405))
+
+// 超过 8 MB：只验证会被拒（不真的把 8 MB 解析完）。
+const huge = await rawRequest(`${base}/mermaid`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: 'x'.repeat(8 * 1024 * 1024 + 64),
+})
+check('回执超过 8 MB → 413', () => assert.equal(huge.status, 413))
+
+console.log('\n[工具] mermaid 语法预检')
+
+const goodResult = await tool.execute({ path: '.dsh/showme/diagram.html' }, exec)
+check('好图：工具返回里带 mermaid 结果', () => {
+  assert.equal(goodResult.mermaid.count, 1)
+  assert.equal(goodResult.mermaid.checked, true)
+  assert.deepEqual(goodResult.mermaid.types, ['flowchart-v2'])
+})
+check('好图：提前给出可预测的 PNG 路径', () => {
+  assert.deepEqual(goodResult.mermaid.png, ['.dsh/showme/mermaid/diagram.1.png'])
+})
+check('好图：hint 里告诉模型去哪看图', () => assert.match(goodResult.hint, /read_image/))
+
+await assert.rejects(
+  () => tool.execute({ path: '.dsh/showme/broken.html' }, exec),
+  /mermaid 有 1 处写错了/,
+)
+check('坏图：这次调用直接失败（页面不通过）', () => true)
+
+const brokenAgain = await tool.execute({ path: '.dsh/showme/broken.html' }, exec).then(
+  () => null,
+  (error) => error,
+)
+check('坏图：报错里带 mermaid 原文（含 Parse error 与 ^ 指位）', () => {
+  assert.match(brokenAgain.message, /Parse error on line 2/)
+  assert.match(brokenAgain.message, /-+\^/)
+})
+check('坏图：报错里说清楚是第几个图、什么类型', () =>
+  assert.match(brokenAgain.message, /第 1 个图（flowchart-v2）/),
+)
+
+const plainResult = await tool.execute({ path: '.dsh/showme/review.html' }, exec)
+check('无 mermaid 的页面：count 为 0，不挡路', () => {
+  assert.equal(plainResult.mermaid.count, 0)
+  assert.equal(plainResult.mermaid.checked, true)
+})
+
 server.close()
 
 console.log('\n[路由] 服务缺失时靠工具记录兜底')

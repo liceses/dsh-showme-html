@@ -115,7 +115,15 @@ for (const target of targets) {
   console.log(`\n[页面] ${name}`)
 
   const match = html.match(/<script>([\s\S]*?)<\/script>/)
-  assert.ok(match !== null, '页面里没有找到内联 <script>')
+  if (match === null) {
+    // 没有内联脚本 → 这一页没有可冒烟的东西（纯图示页是合法的：mermaid 由宿主注入的
+    // 引导脚本渲染，页面自己一行 JS 都不用写）。
+    // 但**声明了交互**（回执 / 点名 / 换皮肤）却没有脚本，那一定是丢了，仍然硬失败。
+    const interactive = /dsh-showme-feedback|id="out"|id="items"|id="picker"/.test(html)
+    assert.ok(!interactive, '这一页有回执/交互标记，却没有内联 <script>')
+    console.log('  skip 页面没有内联脚本（纯静态页，无可冒烟）')
+    continue
+  }
   const script = match[1]
 
   check('内联脚本能通过语法解析', () => new vm.Script(script, { filename: name }))

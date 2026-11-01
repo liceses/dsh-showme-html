@@ -81,6 +81,20 @@ for (const target of targets) {
   }
 }
 
+// vendor 路由（mermaid）：页面里的图靠这条 `<script src>` 加载。它不在会话命名空间下，
+// 所以单独探一次 —— 断了的表现是"图永远空白"，从插件日志里看不出来。
+try {
+  const response = await fetch(`${base}/api/showme/vendor/mermaid.min.js`)
+  const bytes = await response.arrayBuffer()
+  const ok = response.status === 200 && bytes.byteLength > 1_000_000
+  if (!ok) failed += 1
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${String(response.status).padEnd(3)} (期望 200)  vendor: mermaid.min.js`)
+  console.log(`       正文 ${bytes.byteLength} 字节`)
+} catch (error) {
+  failed += 1
+  console.error(`  FAIL vendor: mermaid.min.js  连接失败：${error.message}`)
+}
+
 console.log(failed === 0 ? '\n全部符合预期。\n' : `\n${failed} 项不符合预期。\n`)
 // 用 exitCode 而不是 process.exit()：Node 24 在还有 fetch 连接在飞时强退，
 // 会在 Windows 上抛出 `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`

@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.2.1-blue.svg)
+![Version](https://img.shields.io/badge/version-0.2.2-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -100,6 +100,7 @@ npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / �
 | 为什么需要它 | [它解决什么](#why) |
 | 它有哪些能力 | [核心能力](#features) |
 | 四套皮肤长什么样 | [四套预设样式](#presets) |
+| 流程图 / 时序图怎么写 | [页面里画图：mermaid](#mermaid) |
 | 想少写点代码 | [模板：三份骨架](#templates) |
 | 那个 skill 和插件什么关系 | [`showme-report` 与 DSH 的关系](#skill) |
 | 它到底怎么实现的 | [工作原理](#how) |
@@ -171,6 +172,7 @@ agent 干完一件大事，甩给你 200 行 Markdown。你读完了，但你没
 | **画面内全屏** | 走框架级浮层，Esc 退出回到原位、滚动位置不丢。**控件全在底部**：Windows 桌面端顶部 40px 是原生窗口按钮、画在网页之上，放在那里永远点不到（这条是踩过的现场）。 |
 | **反馈两条路** | ① 页面 `postMessage` 给卡片 → 一键填入输入框；② 页面 `POST /api/showme/feedback` 追加到 `<工作区>/.dsh/showme/inbox.jsonl`。都不实现也不影响——页面里的可选中文本本来就是通用交换格式。 |
 | **四套预设样式** | 见下。 |
+| **mermaid 图** | 页面里写 `<pre class="mermaid">graph TD; A-->B</pre>` 就会渲染成 SVG。宿主侧有**同步语法预检**：图写错 → `show_html` 这次调用**直接失败**，报错是 mermaid 自己的 `Parse error on line N` 原文。渲染完每张图导出一张 PNG，路径随工具结果返回，agent 可以 `read_image` 看自己画的图。见 [mermaid](#mermaid)。 |
 | **回执体检 + 引用体检** | `show_html` 展示前扫一遍页面：**缺可点名的 id**、**缺 `postMessage` 回传**（只给"可复制文本"不算），或**引用了不存在的相对资源**时，把提醒**随工具结果**交回给模型。实测过 skill 被加载、被读，却没被照做——工具结果是这条链路上唯一不依赖模型自觉的通道。 |
 | **skill `showme-report`** | 教 agent 怎么写这一页：挑皮肤、回执契约、交换格式、沙箱坑。**不含版式要求**——版式仍然是 agent 的活。 |
 
@@ -216,6 +218,61 @@ agent 干完一件大事，甩给你 200 行 Markdown。你读完了，但你没
 - **预设不是强制的**：要评审/复刻某个具体系统的视觉时（比如评审 DSH 插件自己的设置页），
   用那个系统的官方调色板才对——这时**不要写 `<link>`**，否则两套视觉会叠在一起。
   理由写在 skill §2.3。
+
+---
+
+<a id="mermaid"></a>
+## 页面里画图：mermaid
+
+流程图、时序图、状态机、类图、ER 图、饼图、甘特图、思维导图——**直接写在页面里**，
+不画 SVG、不引 CDN：
+
+```html
+<pre class="mermaid">
+graph TD;
+  A[调用 show_html] --> B{宿主预检};
+  B -->|通过| C[渲染成图];
+  B -->|语法错| D[这次调用失败];
+</pre>
+```
+
+四种写法等价：`<pre class="mermaid">`、`<div class="mermaid">`、
+`<code class="language-mermaid">`、`<pre data-mermaid>`。
+
+**三件事值得说清楚：**
+
+1. **写错就不通过。** 宿主在 `show_html` 返回**之前**把每个块解析一遍；语法错 → 这次工具调用
+   直接失败，报错是 mermaid 自己的原文（`Parse error on line 2: … --------------^ Expecting …`）。
+   *这是刻意的*：页面是"交付"，带着坏图的交付不算交付。所以也**没有**单独的检查工具可调——
+   检查是展示的一部分。
+2. **agent 能看见自己画的图。** 每张图渲染完导出 PNG，落在
+   `<工作区>/.dsh/showme/mermaid/<页面名>.<序号>.png`（从 1 开始），
+   路径随 `show_html` 的结果返回；同一目录还有 `<页面名>.json`（每张图的类型与尺寸）。
+   渲染失败则额外写 `<页面名>.errors.txt`，卡片头部徽标变红（`mermaid 失败 ×N`）。
+3. **预检只查语法。** 语法通过但运行时失败（不支持的语法糖、超时）拦不住已经返回的调用，
+   由上面的红框 / 徽标 / `errors.txt` 兜。另外，预检扫的是**页面文件里静态写着的**块——
+   JS 里拼出来的块不会被预检（浏览器里照样渲染）。
+
+**为什么是 vendored 的 5.49 MB 单文件，而不是 CDN：**
+
+| 选择 | 原因 |
+|---|---|
+| 单文件普通脚本 | 页面跑在 `sandbox` 的**不透明源** iframe 里，`fetch` 同源资源会被当跨域拦住，只有 `<script src>` 过得去；ESM 版会拆成 208 个 chunk（24 MB），一个 `<script src>` 引不动。 |
+| 由插件自己发 | `GET /api/showme/vendor/mermaid.min.js`，白名单里就这一个文件。不连外网、不看 CDN 脸色，断网也完整。 |
+| 版本钉死 | mermaid **12.2.0**，sha256 `a8a6a6f8…`；`npm run vendor:mermaid` 可重新拉取。 |
+
+**Node 侧为什么能跑：** 预检把同一个 bundle 喂进 `node:vm`。没有真 DOM 时 dompurify 会退化成空壳，
+流程图一解析就抛 `TypeError: Z1.addHook is not a function`——所以在**内存里**把
+`Z1=Rsr()` 换成一个 stub（磁盘上的文件不动，浏览器拿到的仍是原版）。首次加载 ~150 ms（每进程一次），
+每块 5–50 ms。补丁点由测试钉住：升级 mermaid 时先红，再决定怎么改。
+
+**为什么不用 `@mermaid-js/parser`：** 试过（2.0.1），它只覆盖 architecture / gitgraph / packet /
+pie / radar / treemap / wardley / cynefin / info / railroad / treeview / eventmodeling ——
+**没有 flowchart / sequence / class / state / er**，而这几个恰好是最常写的。
+
+> 模板（`review` / `pick` / `report`）里**没有图块**：数据里的 `text` 是转义文本，图进不去；
+> 而由 `core.js` 在浏览器里拼出来的块，宿主预检看不到。要图就自己写这一页
+> （`templates/README.md` 有可直接抄的最小例子）。
 
 ---
 
@@ -413,6 +470,11 @@ templates/core.js        内核：渲染与交互全在这里，三个形状共�
   要看这一页请用**卡片 / 侧栏打开 / 浏览器打开**这三条路 —— 它们都走镜像路由。
   模板页若确实要在原生文档预览里也能起来，把数据改成**静态引入**
   （见 `templates/README.md` 的"宿主差异"一节）。
+- **mermaid 只在卡片的原路径上渲染**：图由 `/api/showme/vendor/…` 那条路由供的脚本画出来，
+  所以**原生文档预览里不渲染**（blob iframe 连不上那条路由），页面里会是一片源码。
+- **mermaid 预检只查语法、只扫静态块**：运行时失败与 JS 动态拼出来的块拦不住；
+  页面超过 2 MiB 时不注入引导脚本（图不渲染）。
+- 模板（`review` / `pick` / `report`）**没有图块** —— 数据是转义文本。要图就自己写页面。
 
 ---
 
@@ -420,14 +482,18 @@ templates/core.js        内核：渲染与交互全在这里，三个形状共�
 ## 仓库结构
 
 ```
-lib/index.js          宿主半区：show_html 工具 + 镜像读路由 + 反馈落盘 + 预设落地
+lib/index.js          宿主半区：show_html 工具 + 镜像读路由 + 反馈落盘 + 预设落地 + vendor 路由
+lib/mermaid-check.js  宿主侧 mermaid 语法预检（node:vm + dompurify 单点补丁）
+lib/mermaid-boot.js   注入页面的引导脚本：加载 mermaid、逐块渲染、导出 PNG、回报执
 lib/client.js         浏览器半区：对话卡片 + 画面内全屏 + 输入框镜像（closure-factory）
 styles/*.css          四套预设样式（插件资产，宿主动态落地到工作区）
 styles/index.json     预设清单：一行 default 就是默认皮肤
 templates/            三份骨架 + core.js（插件资产，同样动态落地）
+vendor/mermaid.min.js mermaid 12.2.0 的 dist 单文件（5.49 MB，sha256 钉在 vendor/README.md）
 skill/showme-report/  产品核心：功能契约 + 交换格式 + 沙箱坑
 examples/             示例页源码（页面冒烟测试的夹具）
-test/                 离线验收：宿主 / 客户端 / 预设 / 模板 / 页面 五组
+test/                 离线验收：清单 / 宿主 / mermaid / 客户端 / 预设 / 模板 / 页面 七组
+tools/                维护脚本：vendor:mermaid · assets:refresh · asar:list · asar:scan
 docs/                 需求演进与定稿方案
 ```
 
@@ -439,7 +505,8 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 253 项离线断言：清单 7 / 宿主 86 / 客户端 52 / 预设 38 / 模板 33 / 页面 37
+npm test                # 318 项离线断言：清单 7 / 宿主 116 / mermaid 35 / 客户端 52 / 预设 38 / 模板 33 / 页面 37
+                        # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 319）
 
 npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区** / 落地副本
 
