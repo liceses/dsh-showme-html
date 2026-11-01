@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.2.2-blue.svg)
+![Version](https://img.shields.io/badge/version-0.2.3-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -67,9 +67,10 @@ npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / �
 > 豁免只对**那一个** `包@版本 × DSH 版本` 生效，写进 profile 的 `compatibility.json`；
 > 升级 DSH 或改包版本号后要重新放行 —— 它是逃生舱，不是兼容承诺。
 
-> **从 0.2.1 升到 0.2.2 只需要重启一次。** mermaid 的 5.5 MB 随包走（`vendor/`），
-> 不下载、不改配置；落地副本那边 `presets/` 不用动，`templates/README.md` 想拿到新版就跑
-> `npm run assets:refresh`（create-only，旧文件会先备份成 `.bak-<时间戳>`）。
+> **从 0.2.1 及更早升上来，只需要重启一次**（0.2.3 与 0.2.2 功能完全一致，只补了文档与截图）。
+> mermaid 的 5.5 MB 随包走（`vendor/`），不下载、不改配置；落地副本那边 `presets/` 不用动，
+> `templates/README.md` 想拿到新版就跑 `npm run assets:refresh`
+> （create-only，旧文件会先备份成 `.bak-<时间戳>`）。
 > 重启后确认新建的实例认得新路由：
 >
 > ```powershell

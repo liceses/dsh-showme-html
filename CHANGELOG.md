@@ -1,5 +1,27 @@
 # 变更记录
 
+## 0.2.3 — 2026-11-01
+
+**0.2.2 的补丁版：只补文档与截图，代码一行未改。**
+
+为什么单独发一版而不是挪 `v0.2.2` 的 tag：tag 一旦推出去就不再移动，
+而 0.2.2 的 tag 打在功能提交上 —— 从 tag 下载的包里 README 的两张 mermaid 图是断的。
+所以按补丁版补发，功能与 0.2.2 完全一致。
+
+### 加
+
+- `docs/screenshots/mermaid-diagrams.png`：flowchart / sequence / state / pie 一页四图。
+- `docs/screenshots/mermaid-types.png`：classDiagram / er / gitGraph / mindmap。
+  两张都是**真截图**——临时实例（`dsh web --port 3312`）的镜像路由打开页面后拍的，
+  原件在 `examples/mermaid-demo.html` 与 `examples/mermaid-types.html`，可复现。
+- README 的 [mermaid] 一节补上这两张图与图注；仓库结构里标明哪个示例是截图原件。
+
+### 说明
+
+- 版本号为什么不是 `0.2.2.1`：语义化版本只有三段，`semver.valid('0.2.2.1') === null`；
+  而 `0.2.2-1` 虽然合法，排序却**低于** `0.2.2`（预发布版），任何比较都会当成降级。
+  "0.2.2 之后的一个补丁"在 semver 里就是 `0.2.3`。
+
 ## 0.2.2 — 2026-11-01
 
 **页面里可以直接写 mermaid 了；而且图写错时 `show_html` 会当场失败。**
