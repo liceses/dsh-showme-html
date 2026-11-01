@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mermaid 类型</title>
+<link rel="stylesheet" href="presets/soft.css">
+<style>
+  pre.mermaid { margin: 0; padding: 8px 0; background: transparent; }
+  pre.mermaid svg { max-width: 100%; height: auto; max-height: 300px; }
+  .page { max-width: 1180px; }
+</style>
+</head><body>
+<div class="page">
+  <header class="masthead">
+    <div class="kicker">同一页 · 另外四类</div>
+    <h1>类图、ER、版本线、脑图</h1>
+    <p class="lead">和流程图用的是同一条路：一段文本 → 宿主预检 → 浏览器渲染 → 导出 PNG。</p>
+  </header>
+
+  <div class="cols two">
+    <section class="section">
+      <h2>类图 <small>classDiagram</small></h2>
+      <pre class="mermaid">
+classDiagram
+  class Tool {
+    +string path
+    +string title
+    +execute()
+  }
+  class MermaidCheck {
+    +extractBlocks(html)
+    +check(html)
+  }
+  Tool --> MermaidCheck : 返回前调用
+      </pre>
+    </section>
+    <section class="section">
+      <h2>实体关系 <small>er</small></h2>
+      <pre class="mermaid">
+erDiagram
+  SESSION ||--o{ PAGE : 展示
+  PAGE ||--o{ DIAGRAM : 包含
+  SESSION {
+    string id
+    string cwd
+  }
+  DIAGRAM {
+    int index
+    string type
+  }
+      </pre>
+    </section>
+  </div>
+
+  <div class="cols two">
+    <section class="section">
+      <h2>版本线 <small>gitGraph</small></h2>
+      <pre class="mermaid">
+gitGraph
+  commit id: "0.2.0"
+  branch mermaid
+  checkout mermaid
+  commit id: "vendor"
+  commit id: "预检"
+  checkout main
+  merge mermaid tag: "v0.2.2"
+      </pre>
+    </section>
+    <section class="section">
+      <h2>脑图 <small>mindmap</small></h2>
+      <pre class="mermaid">
+mindmap
+  root((showme))
+    工具
+      show_html
+    图
+      mermaid
+      预检
+      PNG 回执
+    展示位
+      卡片
+      侧栏
+      全屏
+      </pre>
+    </section>
+  </div>
+</div>
+</body></html>

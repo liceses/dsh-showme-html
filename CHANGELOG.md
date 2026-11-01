@@ -55,6 +55,10 @@ state / er**，而这几个恰好是最常写的。所以舍掉。
 - `SKILL.md` 新增 **§1.2**（怎么画、写错会失败、PNG 在哪、预检只管语法），TL;DR 与 `whenToUse` 各补一句。
   **没有重编号**——`templates/core.js`、`templates/README.md`、`README.md` 都在引用 §5。
 - `templates/README.md` 新增"想画图：模板里没有图块，自己写页面"（含可直接抄的最小例子）。
+- README 的 mermaid 一节补**两张真实截图**：`docs/screenshots/mermaid-diagrams.png`
+  （flowchart / sequence / state / pie）与 `mermaid-types.png`（classDiagram / er / gitGraph / mindmap）。
+  原件是 `examples/mermaid-demo.html` 与 `examples/mermaid-types.html`，
+  截图就是经镜像路由打开这两个文件的样子 —— 不是拼出来的示意图。
 - `README.md`：版本徽章 0.2.2、新增 [mermaid](#mermaid) 一节与目录项、已知限制补三条、仓库结构补
   `lib/mermaid-*.js` / `vendor/` / `tools/`、断言总数与分项同步。
 

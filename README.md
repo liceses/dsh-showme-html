@@ -248,6 +248,12 @@ graph TD;
 四种写法等价：`<pre class="mermaid">`、`<div class="mermaid">`、
 `<code class="language-mermaid">`、`<pre data-mermaid>`。
 
+![一页里四张 mermaid 图](docs/screenshots/mermaid-diagrams.png)
+*图 · 真实展示页 `examples/mermaid-demo.html`（柔和现代皮肤，经镜像路由在浏览器里打开）—— 四张图在页面源码里各自只是一段文本：`flowchart` / `sequence` / `state` / `pie`，颜色和字体全由 mermaid 自己画，预设 CSS 一个字都没为它们写。*
+
+![类图 / ER / 版本线 / 脑图](docs/screenshots/mermaid-types.png)
+*图 · `examples/mermaid-types.html` —— `classDiagram` / `er` / `gitGraph` / `mindmap` 走的是同一条路。图宽自适应容器，所以同一页在卡片（窄）和浏览器（宽）里都能读。*
+
 **三件事值得说清楚：**
 
 1. **写错就不通过。** 宿主在 `show_html` 返回**之前**把每个块解析一遍；语法错 → 这次工具调用
@@ -500,7 +506,7 @@ styles/index.json     预设清单：一行 default 就是默认皮肤
 templates/            三份骨架 + core.js（插件资产，同样动态落地）
 vendor/mermaid.min.js mermaid 12.2.0 的 dist 单文件（5.49 MB，sha256 钉在 vendor/README.md）
 skill/showme-report/  产品核心：功能契约 + 交换格式 + 沙箱坑
-examples/             示例页源码（页面冒烟测试的夹具）
+examples/             示例页源码（页面冒烟测试的夹具；mermaid-demo / mermaid-types 是截图的原件）
 test/                 离线验收：清单 / 宿主 / mermaid / 客户端 / 预设 / 模板 / 页面 七组
 tools/                维护脚本：vendor:mermaid · assets:refresh · asar:list · asar:scan
 docs/                 需求演进与定稿方案
