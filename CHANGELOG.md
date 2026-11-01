@@ -25,8 +25,8 @@
 
 ### 实测
 
-- 离线断言 **330 项全绿**（清单 7 / 宿主 116 / mermaid 35 / **客户端 64** / 预设 38 / 模板 33 / 页面 37）。
-  客户端新增 12 条：只认 `show_html`、`groupId` 归并、`groupTree === 'turn'`、`anchorSeq` 落点、
+- 离线断言 **333 项全绿**（清单 7 / 宿主 116 / mermaid 35 / **客户端 67** / 预设 38 / 模板 33 / 页面 37）。
+  客户端新增 15 条：只认 `show_html`、`groupId` 归并、`groupTree === 'turn'`、`anchorSeq` 落点、
   `meta` 落地、从地址解会话 id、摘要行没有 iframe、缺 `uiConversation` 时不注册。
 - `doctor` 的 `[5]` 在运行中的实例上核到新 bundle（25 个类名）。
 

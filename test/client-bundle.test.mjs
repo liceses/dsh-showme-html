@@ -863,6 +863,47 @@ check('工具行摘要：标题 + 体积 + "页面在下方"，且没有 iframe'
   assert.equal(findElement(rowTree, (node) => node.type === 'iframe'), null, '整页 iframe 应该在 Chat 行里，不在工具行')
 })
 
+// 注意：这个假 React 不会渲染函数组件（`h(Comp, props)` 只会产出元素），
+// 所以「渲染器把 node.data 转成卡片」这一步分两段断言：元素指向 ToolCard，
+// 再把同一份 source 喂给卡片本体看内容。
+const pageNodeElement = internals.ShowmePageNode({
+  node: {
+    data: {
+      path: '.dsh/showme/x.html',
+      title: '评审',
+      note: '',
+      bytes: 1024,
+      url: '/api/showme/raw/session-abc/.dsh/showme/x.html',
+      sessionId: 'session-abc',
+      settled: true,
+      failed: false,
+      failureText: '',
+    },
+  },
+  openFile: () => {},
+})
+check('Chat 行渲染器：把 node.data 原样交给卡片本体', () => {
+  assert.equal(pageNodeElement.type, internals.ToolCard)
+  assert.equal(pageNodeElement.props.source.title, '评审')
+  assert.equal(pageNodeElement.props.source.sessionId, 'session-abc')
+})
+
+const pageNodeTree = internals.ToolCard({ source: pageNodeElement.props.source, openFile: () => {} })
+check('Chat 行出来的卡片：标题 / 体积 / 路径 / 四个动作都在', () => {
+  const text = textOf(pageNodeTree)
+  assert.match(text, /评审/)
+  assert.match(text, /1\.0 KB/)
+  assert.match(text, /\.dsh\/showme\/x\.html/)
+  assert.ok(findElement(pageNodeTree, (node) => node.props?.className === 'dsh-showme-stage') !== null)
+  assert.match(text, /全屏/)
+  assert.match(text, /浏览器打开/)
+})
+
+check('Chat 行渲染器：没有 data 时不渲染（不白屏、不抛）', () => {
+  assert.equal(internals.ShowmePageNode({ node: {} }), null)
+  assert.equal(internals.ShowmePageNode({}), null)
+})
+
 check('缺少 uiConversation 的宿主：不注册 Chat 行（旧宿主照旧内嵌卡片）', () => {
   const before = chatRowRegistrations.length
   let injectedWithoutService = 0
