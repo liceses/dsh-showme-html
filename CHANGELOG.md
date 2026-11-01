@@ -4,6 +4,15 @@
 
 **页面里可以直接写 mermaid 了；而且图写错时 `show_html` 会当场失败。**
 
+### 升级
+
+- **重启一次 `dsh web` / 桌面实例**（宿主半区在启动时装载，改配置触发不了重载）。
+  mermaid 的 5.5 MB 随包走，不下载、不改任何配置。
+- 落地副本：`presets/` 不用动；`templates/README.md` 想拿到新版（多了"想画图"一节）就跑
+  `npm run assets:refresh` —— create-only，旧文件会先备份成 `.bak-<时间戳>`。
+- 重启后确认：`node test/doctor.mjs` 的 `[4]` 里应有
+  `vendor 路由可达 …… 与磁盘一致（5494801 字节）`。
+
 ### 加
 
 - **mermaid 支持**。页面里写 `<pre class="mermaid">graph TD; A-->B</pre>` 就会渲染成图
