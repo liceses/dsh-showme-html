@@ -50,7 +50,7 @@
 
   /* 间距节奏 */
   --s1: 6px;  --s2: 10px; --s3: 16px; --s4: 24px; --s5: 40px; --s6: 68px;
-  --measure: 900px;
+  --measure: 1120px;
 
   --font: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
@@ -98,7 +98,8 @@ code { font-family: var(--mono); font-size: .9em; background: var(--surface-2); 
 .rule { border: 0; border-top: 1px solid var(--line); margin: var(--s5) 0; }
 
 /* ── 报头 ───────────────────────────────────────────────────────────────── */
-.masthead { margin-bottom: var(--s6); }
+.masthead { margin-bottom: var(--s5); }
+.masthead .meta { margin-top: var(--s3); }
 .kicker {
   display: inline-block; font-size: var(--f-xs); font-weight: 600; letter-spacing: .12em;
   text-transform: uppercase; color: var(--accent-ink); background: var(--accent-soft);
@@ -110,10 +111,11 @@ code { font-family: var(--mono); font-size: .9em; background: var(--surface-2); 
 .meta span { display: inline-flex; align-items: center; gap: 6px; }
 
 /* ── 小节 ───────────────────────────────────────────────────────────────── */
-.section { margin-top: var(--s6); }
+.section { margin-top: 44px; }
 .section > h2 {
+  display: flex; align-items: baseline; gap: 10px;
   font-size: var(--f-h2); line-height: 1.34; letter-spacing: -.01em; font-weight: 660;
-  margin: 0 0 var(--s4); padding-bottom: var(--s2); border-bottom: 1px solid var(--line);
+  margin: 0 0 var(--s3);
 }
 .section > h2 small { font-size: var(--f-sm); font-weight: 400; color: var(--muted); margin-left: 10px; }
 h3 { font-size: var(--f-h3); font-weight: 640; margin: var(--s4) 0 var(--s2); }

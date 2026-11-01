@@ -43,7 +43,7 @@
   --lh: 1.78;
 
   --s1: 6px; --s2: 12px; --s3: 18px; --s4: 28px; --s5: 44px; --s6: 72px;
-  --measure: 1020px;
+  --measure: 1120px;
 
   --mono: Consolas, "Cascadia Mono", ui-monospace, Menlo, monospace;
   --font: var(--mono);
@@ -99,7 +99,7 @@ code { font-family: var(--mono); font-size: .94em; background: var(--surface-2);
 .meta { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); font-size: var(--f-xs); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 
 /* ── 小节 ───────────────────────────────────────────────────────────────── */
-.section { margin-top: var(--s6); }
+.section { margin-top: 48px; }
 .section > h2 {
   font-size: var(--f-h2); line-height: 1.3; font-weight: 700; letter-spacing: .04em;
   margin: 0 0 var(--s4); color: #fff;

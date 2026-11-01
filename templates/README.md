@@ -118,12 +118,12 @@ window.SHOWME = {
 | `sections[].heading` | string | 小节标题 |
 | `sections[].sub` | string | 副标题（小字） |
 | `sections[].intro` | string | 小节引导语 |
-| `sections[].two` | boolean | 两栏 |
-| `sections[].items[]` | object[] | **每个条目一张卡片，判定控件就在卡片里** |
+| `sections[].two` | boolean | 两栏（只影响带图卡片那组） |
+| `sections[].items[]` | object[] | **每条都带判定控件**：纯文字排成一行一条，带图才单独成卡 |
 | `items[].id` | string | 必填、唯一 |
 | `items[].title` | string | 条目标题 |
 | `items[].desc` | string | 一句话说明 |
-| `items[].image` | string | **相对页面**的图片路径 |
+| `items[].image` | string | **相对页面**的图片路径（给了才成卡） |
 | `items[].caption` | string | 图注 |
 
 默认判动词：`同意` / `要改` / `不要`。

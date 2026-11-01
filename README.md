@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.2.5-blue.svg)
+![Version](https://img.shields.io/badge/version-0.2.6-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -183,6 +183,7 @@ agent 干完一件大事，甩给你 200 行 Markdown。你读完了，但你没
 | **画面内全屏** | 走框架级浮层，Esc 退出回到原位、滚动位置不丢。**控件全在底部**：Windows 桌面端顶部 40px 是原生窗口按钮、画在网页之上，放在那里永远点不到（这条是踩过的现场）。 |
 | **反馈两条路** | ① 页面 `postMessage` 给卡片 → 一键填入输入框；② 页面 `POST /api/showme/feedback` 追加到 `<工作区>/.dsh/showme/inbox.jsonl`。都不实现也不影响——页面里的可选中文本本来就是通用交换格式。 |
 | **四套预设样式** | 见下。 |
+| **模板按内容定密度** | 条目不是"一人一张卡"：**纯文字排成一块面板、一行一条，只有带 `image` 的条目才单独成卡**。同屏不再是一排一模一样的卡，视觉重量只留给真需要看图的东西；横屏（≥900px）报头走两栏、文字行的判定控件靠右成一列，卡片里（≤760px）行折成一列、判定控件铺满。 |
 | **mermaid 图** | 页面里写 `<pre class="mermaid">graph TD; A-->B</pre>` 就会渲染成 SVG。宿主侧有**同步语法预检**：图写错 → `show_html` 这次调用**直接失败**，报错是 mermaid 自己的 `Parse error on line N` 原文。渲染完每张图导出一张 PNG，路径随工具结果返回，agent 可以 `read_image` 看自己画的图。见 [mermaid](#mermaid)。 |
 | **回执体检 + 引用体检** | `show_html` 展示前扫一遍页面：**缺可点名的 id**、**缺 `postMessage` 回传**（只给"可复制文本"不算），或**引用了不存在的相对资源**时，把提醒**随工具结果**交回给模型。实测过 skill 被加载、被读，却没被照做——工具结果是这条链路上唯一不依赖模型自觉的通道。 |
 | **skill `showme-report`** | 教 agent 怎么写这一页：挑皮肤、回执契约、交换格式、沙箱坑。**不含版式要求**——版式仍然是 agent 的活。 |
@@ -303,12 +304,12 @@ skill 用文字规定"回执怎么做"，模型每次都重新实现一遍，于
 
 | 骨架 | 形状 | 什么时候用 |
 |---|---|---|
-| `review.html` | 逐项表态 | 一排条目，每条一个判定 + 备注。带图不带图都行。**最常用** |
+| `review.html` | 逐项表态 | 纯文字的条目排成一行一条，带图的单独成卡；每条一个判定 + 备注。**最常用** |
 | `pick.html` | 候选挑选 | 单选 / 多选。封面选哪张、这几张素材留哪几个 |
 | `report.html` | 图文汇报 | 有图 / 表 / 时间线、不需要逐项表态；每小节一个轻回执 |
 
 ![模板页 · review 形状](docs/screenshots/template-review.png)
-*图 · 真实示例页 `examples/template-demo.html`（数据来自同目录的 `template-demo.data.js`，皮肤由数据文件里的 `skin: 'swiss'` 指定）—— 每个可点名的条目都带 `同意 / 要改 / 不要` 与备注框，控件就长在它指的那样东西旁边。*
+*图 · 渲染出来的一页 review（柔和现代皮肤）：上面那条带图的成卡、下面纯文字的排成一块面板一行一条；每条右侧就是它的 `同意 / 要改 / 不要`，备注是可选的虚线框。横屏两列、卡片里单列。*
 
 **一页 = 外壳 + 内核 + 数据**，你只写最后那个：
 
@@ -554,8 +555,8 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 338 项离线断言：清单 7 / 宿主 116 / mermaid 35 / 客户端 72 / 预设 38 / 模板 33 / 页面 37
-                        # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 339）
+npm test                # 351 项离线断言：清单 7 / 宿主 116 / mermaid 35 / 客户端 72 / 预设 38 / 模板 46 / 页面 37
+                        # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 352）
 
 npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区** / 落地副本
 

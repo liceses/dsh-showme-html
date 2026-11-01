@@ -3,7 +3,7 @@
  * 检查它渲染出来的 HTML 与交互行为。
  *
  * 重点验三件"模型以前老做错"的事：
- *   ① 控件长在条目自己的卡片里（不是堆在末尾）—— skill §3.2
+ *   ① 控件和它指的对象在**同一块**里（带图才算卡，纯文字走行）—— skill §3.2
  *   ② 每次变化都 postMessage（默认通道）—— skill §4.1
  *   ③ 组句格式 <id> <判定词>[：备注] —— skill §3.1
  *
@@ -18,6 +18,7 @@ import vm from 'node:vm'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const source = await readFile(join(here, '..', 'templates', 'core.js'), 'utf8')
+const softCss = await readFile(join(here, '..', 'styles', 'soft.css'), 'utf8')
 
 let checks = 0
 /**
@@ -184,8 +185,8 @@ check('① 控件长在条目自己的卡片里（skill §3.2）', () => {
   assert.match(one, /class="sm-note"/, '条目里没有备注输入')
   assert.match(one, /stills\/a\.png/, '条目里没有它的图')
 })
-check('图有 max-height（避免整屏高图导致图与控件不同屏）', () =>
-  assert.match(source, /\.sm-img\{[^}]*max-height:60vh/),
+check('图有高度上限（避免整屏高图把控件挤出视野）', () =>
+  assert.match(source, /\.sm-img\{[^}]*max-height:360px/),
 )
 check('默认判动词是同意/要改/不要', () => {
   const one = sliceItem(reviewResult.content.innerHTML, 'hero-v3')
@@ -197,6 +198,47 @@ check('收尾区有可选中复制的兜底 textarea', () => {
 check('词表列了出来（skill §3.1）', () => {
   const words = reviewResult.words.innerHTML
   assert.ok(words.includes('同意') && words.includes('要改'))
+})
+
+console.log('\n[密度] 纯文字走行，带图才发卡')
+
+// 为什么值得几条测试：纯文字条目也一人一张卡时，整屏是"一模一样的卡片"，
+// 没有焦点也没有分组（相似性原则被用反了）。规则：只有带图才发卡。
+check('带图的条目渲染成卡片', () => {
+  const html = reviewResult.content.innerHTML
+  assert.match(html, /class="card sm-item" data-item="hero-v3"/, '带图的条目没成卡')
+})
+check('纯文字条目渲染成行，不再单独发卡', () => {
+  const html = reviewResult.content.innerHTML
+  assert.match(html, /class="sm-line" data-item="hero-v4"/, '纯文字条目没走行式布局')
+  assert.doesNotMatch(html, /class="card sm-item" data-item="hero-v4"/, '纯文字条目又发了一张卡')
+  assert.match(sliceItem(html, 'hero-v4'), /class="sm-note" data-id="hero-v4"/, '行里没有备注输入')
+})
+check('纯文字条目收进同一块面板', () =>
+  assert.match(reviewResult.content.innerHTML, /class="sm-list"/),
+)
+check('判定按钮包在分段控件里（希克：三个固定选项）', () => {
+  const one = sliceItem(reviewResult.content.innerHTML, 'hero-v3')
+  assert.match(one, /class="sm-seg" role="group"/, '按钮没有分段控件包裹')
+  assert.match(one, /aria-label="hero-v3 的判定"/, '分段控件没有可读的组名')
+})
+
+const mixed = await run('review', {
+  title: '混排',
+  sections: [{ heading: 'h', items: [
+    { id: 'a-text', title: '甲', desc: '纯文字' },
+    { id: 'b-img', title: '乙', image: 'stills/b.png' },
+    { id: 'c-text', title: '丙' },
+  ] }],
+})
+check('混排：卡片组排在前，文字行保持原顺序', () => {
+  const html = mixed.content.innerHTML
+  const card = html.indexOf('data-item="b-img"')
+  const firstLine = html.indexOf('data-item="a-text"')
+  const secondLine = html.indexOf('data-item="c-text"')
+  assert.ok(card !== -1 && firstLine !== -1 && secondLine !== -1, '有条目没渲染')
+  assert.ok(card < firstLine, '卡片组没有排在前面')
+  assert.ok(firstLine < secondLine, '文字行没有保持原顺序')
 })
 
 console.log('\n[交互] 判定 → 组句 → postMessage')
@@ -218,6 +260,10 @@ check('② 每次变化都 postMessage 给卡片（skill §4.1）', () => {
   assert.ok(last !== undefined, '一次 postMessage 都没发')
   assert.equal(last.type, 'dsh-showme-feedback')
   assert.equal(last.text, 'hero-v3 同意')
+})
+check('回执区有进度提示，选完就往上走（目标梯度）', () => {
+  assert.match(reviewResult.receipt.innerHTML, /id="sm-progress"/, '回执区没有进度元素')
+  assert.equal(reviewResult.document.getElementById('sm-progress').textContent, '已表态 1 / 2')
 })
 check('条目上打了已表态的标记', () =>
   assert.match(reviewResult.content.innerHTML, /data-item="hero-v3" data-done="0"/),
@@ -353,6 +399,31 @@ check('README 覆盖三个形状', () => {
 check('README 明确劝退读内核', () => assert.match(readme, /不是 `core\.js`/))
 check('README 说了数据文件必须和页面同名', () => assert.match(readme, /必须和页面同名/))
 check('内核头部也指向 README', () => assert.match(source, /别读这个文件/))
+
+console.log('\n[皮肤] 节奏与分组（横屏用满宽度、去掉重复分隔线）')
+
+check('soft 皮肤：小节标题不再画出那条下边框', () =>
+  assert.doesNotMatch(softCss, /\.section > h2 \{[^}]*border-bottom/, '小节标题还带着下边框'),
+)
+check('soft 皮肤：小节间距收紧到 44px', () =>
+  assert.match(softCss, /\.section \{ margin-top: 44px; \}/, '小节间距还是老值'),
+)
+check('soft 皮肤：横屏量宽放到 1120px', () =>
+  assert.match(softCss, /--measure: 1120px;/, '还有 900px 的窄量宽'),
+)
+check('控件补了键盘焦点环（现在只有备注输入改边框）', () =>
+  assert.match(source, /\.sm-btn:focus-visible,.sm-note:focus-visible\{outline:2px/, '没有 focus-visible 规则'),
+)
+check('窄屏：文字行折成一列、分段控件铺满', () => {
+  assert.match(source, /@media \(max-width:760px\)\{\.sm-line\{grid-template-columns:1fr/, '窄屏没有把行折成一列')
+  assert.match(source, /\.sm-btn\{flex:1\}/, '窄屏没有把按钮等分铺满')
+})
+check('横屏：报头走两栏（标题在左、元信息在右）', () =>
+  assert.match(source, /@media \(min-width:900px\)\{\.masthead\{display:grid/, '报头没有两栏规则'),
+)
+check('已表态的条目描述降权（减弱占用的注意力）', () =>
+  assert.match(source, /data-done="1"\] \.sm-desc\{opacity/, '没有「已完成」的降权样式'),
+)
 
 console.log('\n[约束] 沙箱里不能用的东西')
 

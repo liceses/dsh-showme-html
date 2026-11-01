@@ -169,29 +169,78 @@
   // ══════════════ 可点名条目的公共零件 ══════════════
 
   /**
-   * 渲染一个可点名条目。**控件长在条目自己的卡片里**（skill §3.2）。
-   * @param item - { id, title, desc, image, caption }。
+   * 判定控件：三个词、固定顺序、位置不随条目变化（希克定律 + 肌肉记忆）。
+   * @param id - 条目 id。
    * @param words - 该条目的判动词。
    * @param mode - 'single' 时按钮上带 data-mode。
    */
-  function itemHtml(item, words, mode) {
-    var id = String(item.id || '')
-    ids.push(id)
+  function controlHtml(id, words, mode) {
     var buttons = words.map(function (word) {
       return '<button class="sm-btn" data-id="' + esc(id) + '" data-w="' + esc(word) + '" aria-pressed="false"' +
         (mode ? ' data-mode="' + mode + '"' : '') + '>' + esc(word) + '</button>'
     }).join('')
+    return '<div class="sm-seg" role="group" aria-label="' + esc(id) + ' 的判定">' + buttons + '</div>' +
+      '<input class="sm-note" data-id="' + esc(id) + '" placeholder="备注（可空）" value="">'
+  }
+
+  /**
+   * 带图的条目：发一张卡（视觉重量只给真需要看图的东西，孤立效应）。
+   * @param item - { id, title, desc, image, caption }。
+   */
+  function cardHtml(item, words, mode) {
+    var id = String(item.id || '')
+    ids.push(id)
     return '<div class="card sm-item" data-item="' + esc(id) + '" data-done="0">' +
-      '<div class="sm-id">' + esc(id) + '</div>' +
-      (item.title ? '<h3>' + esc(item.title) + '</h3>' : '') +
-      (item.desc ? '<p>' + esc(item.desc) + '</p>' : '') +
-      (item.image
-        ? '<figure class="evidence"><img class="sm-img" src="' + esc(item.image) + '" alt="' + esc(item.title || '') + '">' +
-          (item.caption ? '<figcaption>' + esc(item.caption) + '</figcaption>' : '') + '</figure>'
-        : '') +
-      '<div class="sm-row">' + buttons +
-      '<input class="sm-note" data-id="' + esc(id) + '" placeholder="备注（可空）" value="">' +
-      '</div></div>'
+      '<div class="sm-head"><span class="sm-id">' + esc(id) + '</span>' +
+      (item.title ? '<h3>' + esc(item.title) + '</h3>' : '') + '</div>' +
+      (item.desc ? '<p class="sm-desc">' + esc(item.desc) + '</p>' : '') +
+      '<figure class="evidence"><img class="sm-img" src="' + esc(item.image) + '" alt="' + esc(item.title || '') + '">' +
+      (item.caption ? '<figcaption>' + esc(item.caption) + '</figcaption>' : '') + '</figure>' +
+      '<div class="sm-ctl">' + controlHtml(id, words, mode) + '</div>' +
+      '</div>'
+  }
+
+  /**
+   * 纯文字的条目：走一行（同类同形，不做「一人一张卡」的重复布局）。
+   * @param item - { id, title, desc }。
+   */
+  function lineHtml(item, words, mode) {
+    var id = String(item.id || '')
+    ids.push(id)
+    return '<div class="sm-line" data-item="' + esc(id) + '" data-done="0">' +
+      '<div class="sm-lineMain"><div class="sm-head"><span class="sm-id">' + esc(id) + '</span>' +
+      (item.title ? '<h3>' + esc(item.title) + '</h3>' : '') + '</div>' +
+      (item.desc ? '<p class="sm-desc">' + esc(item.desc) + '</p>' : '') + '</div>' +
+      '<div class="sm-ctl">' + controlHtml(id, words, mode) + '</div>' +
+      '</div>'
+  }
+
+  /**
+   * 一组条目：带图的发卡、纯文字的合成一块面板；组内保序，卡片组在前。
+   * @param items - 条目数组。
+   * @param words - 判动词。
+   * @param mode - 透传给控件。
+   */
+  function itemsHtml(items, words, mode, two) {
+    if (items.length === 0) return ''
+    var cards = []
+    var lines = []
+    items.forEach(function (item) { (item && item.image ? cards : lines).push(item) })
+    var cardsHtml = ''
+    if (cards.length > 0) {
+      cardsHtml = '<div class="cols sm-cards' + (two ? ' two' : '') + '">' +
+        cards.map(function (item) { return cardHtml(item, words, mode) }).join('') + '</div>'
+    }
+    var linesHtml = ''
+    if (lines.length > 0) {
+      linesHtml = '<div class="sm-list">' +
+        lines.map(function (item) { return lineHtml(item, words, mode) }).join('') + '</div>'
+    }
+    // 横屏节省空间：只有一张卡 + 一叠文字行时，左右并排，而不是让右半边空着。
+    if (cards.length === 1 && lines.length > 0) {
+      return '<div class="sm-split">' + cardsHtml + linesHtml + '</div>'
+    }
+    return cardsHtml + linesHtml
   }
 
   // ══════════════ 三个形状 ══════════════
@@ -202,10 +251,7 @@
     list(data.sections).forEach(function (sec) {
       var body = sec.intro ? '<p>' + esc(sec.intro) + '</p>' : ''
       var items = list(sec.items)
-      if (items.length > 0) {
-        body += '<div class="cols' + (sec.two ? ' two' : '') + '">' +
-          items.map(function (item) { return itemHtml(item, verdicts, '') }).join('') + '</div>'
-      }
+      if (items.length > 0) body += itemsHtml(items, verdicts, '', sec.two)
       body += list(sec.blocks).map(block).join('')
       html += section(sec.heading, sec.sub, body)
     })
@@ -219,10 +265,7 @@
       ? '<div class="callout"><span class="label">要你定</span>' + esc(data.question) + '</div>'
       : ''
     var items = list(data.candidates)
-    if (items.length > 0) {
-      html += '<div class="cols">' +
-        items.map(function (item) { return itemHtml(item, [verdicts[0]], mode) }).join('') + '</div>'
-    }
+    if (items.length > 0) html += itemsHtml(items, [verdicts[0]], mode)
     html += list(data.blocks).map(block).join('')
     return section(data.heading, data.sub, html)
   }
@@ -236,14 +279,9 @@
       if (sec.sectionReceipt !== false && sec.heading) {
         var id = String(sec.id || ('sec-' + String(sec.heading).slice(0, 20)))
         ids.push(id)
-        var buttons = DEFAULT_VERDICTS.report.map(function (word) {
-          return '<button class="sm-btn" data-id="' + esc(id) + '" data-w="' + esc(word) + '" aria-pressed="false">' +
-            esc(word) + '</button>'
-        }).join('')
-        body += '<div class="callout sm-item" data-item="' + esc(id) + '" data-done="0">' +
-          '<div class="sm-id">' + esc(id) + '</div>' +
-          '<div class="sm-row">' + buttons +
-          '<input class="sm-note" data-id="' + esc(id) + '" placeholder="这一段有意见就写在这里" value="">' +
+        body += '<div class="sm-list sm-list-solo"><div class="sm-line" data-item="' + esc(id) + '" data-done="0">' +
+          '<div class="sm-lineMain"><div class="sm-head"><span class="sm-id">' + esc(id) + '</span></div></div>' +
+          '<div class="sm-ctl">' + controlHtml(id, DEFAULT_VERDICTS.report, '') + '</div>' +
           '</div></div>'
       }
       html += section(sec.heading, sec.sub, body)
@@ -258,6 +296,7 @@
     return '<section class="section sm-receipt">' +
       '<h2>回执 <small>这行文本就是回执；也可以点上面的判定，我会实时把它交给卡片</small></h2>' +
       '<div class="chips" id="sm-words"></div>' +
+      '<p class="sm-progress" id="sm-progress"></p>' +
       '<textarea id="sm-out" readonly placeholder="在上面做选择，这里会出现一行一条的回执"></textarea>' +
       '<p style="margin-top:10px">' +
       '<button class="btn primary" id="sm-send">交给卡片</button> ' +
@@ -286,6 +325,18 @@
     for (var i = 0; i < items.length; i++) {
       var one = state[items[i].getAttribute('data-item')]
       items[i].setAttribute('data-done', one && one.verdict ? '1' : '0')
+    }
+
+    // 进度一直可见：还差几条，用户知道什么时候可以收工（目标梯度）。
+    var done = 0
+    for (var n = 0; n < ids.length; n++) {
+      if (state[ids[n]] && state[ids[n]].verdict) done++
+    }
+    var progress = document.getElementById('sm-progress')
+    if (progress !== null) {
+      progress.textContent = ids.length === 0 ? ''
+        : done === 0 ? '还没表态 · 一共 ' + ids.length + ' 条'
+          : '已表态 ' + done + ' / ' + ids.length
     }
 
     // 默认通道：**每次变化都发**，卡片上的回执条才是活的（skill §4.1）。
@@ -370,20 +421,74 @@
 
   // ══════════════ 启动 ══════════════
 
-  /** 控件样式。只用预设令牌，所以换皮肤会跟着变。 */
+  /**
+   * 控件样式。只用预设令牌，所以换皮肤会跟着变。
+   * 结构原则（skill §3.2）：控件和它指的对象在同一块里 —— 纯文字走行，带图才发卡。
+   */
   var CONTROL_CSS = [
-    '.sm-item{display:flex;flex-direction:column;gap:var(--s2,10px)}',
-    '.sm-id{font-family:var(--mono,monospace);font-size:var(--f-xs,12px);letter-spacing:.08em;color:var(--accent,#3b82f6)}',
-    '.sm-item[data-done="1"] .sm-id::after{content:" ✓"}',
-    '.sm-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:auto}',
-    '.sm-btn{cursor:pointer;font:400 var(--f-xs,12px)/1 var(--font,sans-serif);padding:7px 11px;border:1px solid var(--line,#e5e7eb);background:none;color:var(--ink-2,#4b5563);border-radius:var(--r-sm,4px)}',
-    '.sm-btn:hover{border-color:var(--ink,#111);color:var(--ink,#111)}',
-    '.sm-btn[aria-pressed="true"]{background:var(--accent,#3b82f6);border-color:var(--accent,#3b82f6);color:#fff}',
-    '.sm-note{flex:1;min-width:150px;font:400 var(--f-xs,12px)/1.5 var(--font,sans-serif);padding:6px 9px;border:1px solid var(--line,#e5e7eb);background:none;color:var(--ink,#111);border-radius:var(--r-sm,4px)}',
-    '.sm-note:focus{outline:none;border-color:var(--ink,#111)}',
-    '.sm-img{display:block;width:100%;max-height:60vh;object-fit:contain;background:var(--surface-2,#f4f4f4)}',
+    // 条目里的层次：id（锚点）→ 标题 → 描述 → 控件
+    '.sm-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}',
+    '.sm-head h3{margin:0}',
+    '.sm-id{font-family:var(--mono,monospace);font-size:var(--f-xs,12px);letter-spacing:.06em;color:var(--accent,#3b82f6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34ch}',
+    '.sm-desc{margin:0;font-size:var(--f-sm,13.5px);color:var(--ink-2,#4b5563)}',
+    '.sm-item[data-done="1"] .sm-id::after,.sm-line[data-done="1"] .sm-id::after{content:" ✓"}',
+    '.sm-item[data-done="1"] .sm-desc{opacity:.72}',
+
+    // 带图条目：卡片（视觉重量只给它）
+    '.cols.sm-cards{grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));margin-top:14px}',
+    // 横屏：一张卡 + 一叠文字行并排（右边不再空着）
+    '.sm-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:16px;align-items:start;margin-top:14px}',
+    '.sm-split .sm-cards{margin-top:0}',
+    '.sm-split .sm-list{margin:0}',
+    '.sm-split .sm-line{grid-template-columns:1fr;gap:8px;align-items:start}',
+    '.sm-split .sm-ctl{width:100%}',
+    '.sm-split .sm-seg{display:flex;width:100%;justify-self:stretch}',
+    '.sm-split .sm-btn{flex:1}',
+    '.sm-item{display:flex;flex-direction:column;gap:10px;max-width:640px}',
+
+    // 纯文字条目：一块面板 + 行（共同区域 + 邻近性）
+    '.sm-list{background:var(--surface,#fff);border:1px solid var(--line,#e5e7eb);border-radius:var(--r,14px);overflow:hidden;margin:14px 0}',
+    '.sm-list-solo{margin:10px 0 0}',
+    // 小节回执：一行搞定（id 在左，判定 + 备注在右并排），不再占一整块面板的高度。
+    '.sm-list-solo .sm-line{grid-template-columns:auto minmax(0,1fr);align-items:center;padding:10px 16px}',
+    '.sm-list-solo .sm-ctl{grid-auto-flow:column;justify-content:end;align-items:center;gap:10px}',
+    '.sm-list-solo .sm-note{width:240px}',
+    '.sm-line{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:18px;align-items:center;padding:12px 16px}',
+    '.sm-line .sm-ctl{margin-top:0}',
+    '.sm-line + .sm-line{border-top:1px solid var(--line,#e5e7eb)}',
+    '.sm-line:hover{background:var(--surface-2,#f4f4f4)}',
+    '.sm-lineMain{display:flex;flex-direction:column;gap:3px;min-width:0}',
+
+    // 控件层：分段控件 + 备注一行，钉在底部
+    '.sm-ctl{display:grid;gap:8px;margin-top:auto}',
+    '.sm-seg{display:inline-flex;justify-self:start;border:1px solid var(--line-strong,#d5dae2);border-radius:var(--r-pill,999px);overflow:hidden;background:var(--surface,#fff)}',
+    '.sm-btn{cursor:pointer;font:500 var(--f-xs,12px)/1 var(--font,sans-serif);padding:10px 15px;border:0;background:none;color:var(--ink-2,#4b5563)}',
+    '.sm-btn + .sm-btn{border-left:1px solid var(--line,#e5e7eb)}',
+    '.sm-btn:hover{background:var(--surface-2,#f4f4f4);color:var(--ink,#111)}',
+    '.sm-btn[aria-pressed="true"]{background:var(--accent,#3b82f6);color:#fff}',
+    '.sm-btn:focus-visible,.sm-note:focus-visible{outline:2px solid var(--accent,#3b82f6);outline-offset:2px}',
+    '.sm-note{width:100%;min-height:36px;font:400 var(--f-xs,12px)/1.5 var(--font,sans-serif);padding:8px 10px;border:1px solid var(--line,#e5e7eb);background:var(--paper,transparent);color:var(--ink,#111);border-radius:var(--r-sm,4px)}',
+    // 行里的备注是可选项：虚线 + 静音，别让它抢判定按钮的注意力（也不做隐藏，避免悬停时行高跳动）。
+    '.sm-line .sm-note{border-style:dashed;background:transparent;color:var(--muted,#8a8a8a)}',
+    '.sm-line .sm-note:focus{color:var(--ink,#111);border-style:solid}',
+    '.sm-note:focus{outline:none;border-color:var(--accent,#3b82f6)}',
+    '.sm-img{display:block;width:100%;max-height:360px;object-fit:contain;background:var(--surface-2,#f4f4f4)}',
+
+    // 回执区
+    '.sm-progress{margin:0 0 10px;font-size:var(--f-xs,12px);color:var(--muted,#8a8a8a)}',
     '.sm-receipt textarea{width:100%;min-height:110px;box-sizing:border-box;padding:10px;resize:vertical;font:400 var(--f-sm,13px)/1.7 var(--mono,monospace);background:none;color:var(--ink,#111);border:1px solid var(--line,#e5e7eb);border-radius:var(--r-sm,4px)}',
     '.sm-msg{font-size:var(--f-xs,12px);color:var(--muted,#8a8a8a);margin-left:8px}',
+
+    // 窄屏：行折成一列，分段控件铺满（菲茨定律：别把小按钮塞在窄格里）
+    '@media (max-width:760px){.sm-line{grid-template-columns:1fr;gap:10px;align-items:start}',
+    '.sm-ctl{width:100%}.sm-seg{display:flex;width:100%;justify-self:stretch}.sm-btn{flex:1}',
+    '.sm-list-solo .sm-line{grid-template-columns:1fr}.sm-list-solo .sm-ctl{grid-auto-flow:row}',
+    '.sm-list-solo .sm-note{width:100%}}',
+    // 一张卡并排时，窄屏回到上下堆叠
+    '@media (max-width:900px){.sm-split{grid-template-columns:1fr}}',
+    // 横屏：报头两栏（标题在左、元信息在右），纵向省下一整段
+    '@media (min-width:900px){.masthead{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:end}',
+    '.masthead .meta{flex-direction:column;align-items:flex-end;text-align:right;margin-top:0}}',
   ].join('')
 
   /** 渲染整页。 */
@@ -406,9 +511,11 @@
 
     document.getElementById('sm-masthead').innerHTML =
       '<header class="masthead">' +
+      '<div class="mastheadMain">' +
       (data.kicker ? '<div class="kicker">' + esc(data.kicker) + '</div>' : '') +
       '<h1>' + esc(data.title || '（数据里缺 title）') + '</h1>' +
       (data.lead ? '<p class="lead">' + esc(data.lead) + '</p>' : '') +
+      '</div>' +
       (list(data.meta).length > 0
         ? '<div class="meta">' + list(data.meta).map(function (one) { return '<span>' + esc(one) + '</span>' }).join('') + '</div>'
         : '') +

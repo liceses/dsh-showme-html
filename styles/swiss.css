@@ -39,7 +39,7 @@
   --lh: 1.72;
 
   --s1: 6px; --s2: 12px; --s3: 20px; --s4: 32px; --s5: 56px; --s6: 96px;
-  --measure: 1060px;
+  --measure: 1180px;
 
   --font: "Helvetica Neue", Helvetica, Arial, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
@@ -74,7 +74,7 @@ code { font-family: var(--mono); font-size: .88em; background: var(--surface-2);
 
 /* ── 报头 ───────────────────────────────────────────────────────────────── */
 .masthead {
-  margin-bottom: var(--s6); padding-bottom: var(--s4);
+  margin-bottom: var(--s5); padding-bottom: var(--s4);
   border-bottom: 3px solid var(--line-strong);
 }
 .kicker {
@@ -96,7 +96,7 @@ code { font-family: var(--mono); font-size: .88em; background: var(--surface-2);
 }
 
 /* ── 小节 ───────────────────────────────────────────────────────────────── */
-.section { margin-top: var(--s6); }
+.section { margin-top: 56px; }
 .section > h2 {
   font-size: var(--f-h2); line-height: 1.2; letter-spacing: -.02em; font-weight: 700;
   margin: 0 0 var(--s4); padding-top: var(--s2); border-top: 3px solid var(--line-strong);
