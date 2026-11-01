@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.2.4-blue.svg)
+![Version](https://img.shields.io/badge/version-0.2.5-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -554,8 +554,8 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 333 项离线断言：清单 7 / 宿主 116 / mermaid 35 / 客户端 67 / 预设 38 / 模板 33 / 页面 37
-                        # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 334）
+npm test                # 338 项离线断言：清单 7 / 宿主 116 / mermaid 35 / 客户端 72 / 预设 38 / 模板 33 / 页面 37
+                        # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 339）
 
 npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区** / 落地副本
 

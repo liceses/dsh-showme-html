@@ -1,5 +1,40 @@
 # 变更记录
 
+## 0.2.5 — 2026-11-01
+
+**在独立实例上真跑了一轮 `show_html`，一次验出三个 bug，全修。**
+
+0.2.4 把卡片搬成独立 Chat 行之后，只在离线测试里过 —— 真机上第一个回合就露馅了：
+卡片在，但**身体是白的**，控制台/接口还报 `expected /raw/<sessionId>/<workspace-relative path>`。
+
+### 修
+
+- **卡片身体白屏（懒挂载永不触发）**。`IntersectionObserver` 在 chat 的流容器
+  （`overflow: clip` + `container-type: inline-size`）里首次回调就是 `isIntersecting: false`，
+  之后不再触发 —— 页面永远停在"滚动到这里时载入页面"。改成**几何判断 + 退避轮询**
+  （250ms → ×1.6 → 上限 3s），scroll/resize 立即复检，进视口就停表。
+  离屏历史卡片仍不持有活 iframe。
+- **`expected /raw/<sessionId>/<workspace-relative path>`**（两层）：
+  ① `ShowmePageNode` 只转交了 `{source, openFile}`，**把槽位标准 props 里的 `sessionId` 丢了**；
+  ② `rawUrl('')` 会硬拼出 `/api/showme/raw//<path>`。现在显式转交 + 三级兜底
+  （槽位 props → `meta.url` → `conversation.input.left` 记下的当前会话），
+  `rawUrl` 遇空 id 直接返回空串。
+- 地址为空时卡片显示「拿不到这一页的地址（会话还没就绪）。刷新一下聊天页再试。」，
+  不再挂一个坏 iframe 让用户对着白块猜。
+
+### 实测（独立实例，真模型回合）
+
+```
+tool/call   name=show_html  args={"path":".dsh/showme/mermaid-demo.html","title":"折叠验证"}
+tool/result meta={"bytes":2107,"url":"/api/showme/raw/session-…/.dsh/showme/mermaid-demo.html"}
+DOM： [data-chat-flow-kind="showme-page"] 存在（不在过程组里）
+      iframe 1 个，.dsh-showme-placeholder 0 个
+```
+
+轮次结束后工具调用收起，卡片里的页面照常渲染。
+
+- 离线断言 **338 项全绿**（清单 7 / 宿主 116 / mermaid 35 / **客户端 72** / 预设 38 / 模板 33 / 页面 37）。
+
 ## 0.2.4 — 2026-11-01
 
 **页面卡片不再被「工作步骤」折叠吃掉 —— 它现在是一条独立的 Chat 行。**
