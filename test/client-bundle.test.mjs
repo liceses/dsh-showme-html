@@ -899,6 +899,45 @@ check('Chat 行出来的卡片：标题 / 体积 / 路径 / 四个动作都在',
   assert.match(text, /浏览器打开/)
 })
 
+check('rawUrl：空会话 id 不产出坏地址（否则路由回 "expected /raw/<sessionId>/..."）', () => {
+  assert.equal(internals.rawUrl('', '.dsh/showme/x.html'), '')
+  assert.equal(internals.rawUrl('session-a', '.dsh/showme/x.html'), '/api/showme/raw/session-a/.dsh/showme/x.html')
+})
+
+// 节点视图拿不到 props.sessionId，而 `meta.url` 在客户端的会话事件里不保证有 ——
+// 兜底必须是"输入框座位记下的当前会话"，否则会拼出 `/api/showme/raw//<path>`
+// （现场报错原文：{"ok":false,"error":"expected /raw/<sessionId>/<workspace-relative path>"}）。
+const noUrlSource = {
+  path: '.dsh/showme/x.html',
+  title: '评审',
+  note: '',
+  url: '',
+  sessionId: '',
+  settled: true,
+  failed: false,
+  failureText: '',
+}
+
+check('节点行缺地址时：用输入框座位的会话 id 兜底拼出镜像地址', () => {
+  internals.inputRefs.sessionId = 'session-from-composer'
+  assert.equal(
+    internals.resolveCardUrl(noUrlSource),
+    '/api/showme/raw/session-from-composer/.dsh/showme/x.html',
+  )
+})
+
+check('两处都拿不到会话 id：给空地址（卡片会显示"拿不到地址"而不是坏 iframe）', () => {
+  internals.inputRefs.sessionId = ''
+  assert.equal(internals.resolveCardUrl(noUrlSource), '')
+})
+
+const noAddress = internals.ToolCard({ source: noUrlSource, openFile: () => {} })
+check('没有地址时：画面里是那句能行动的话，不是 iframe', () => {
+  const text = textOf(noAddress)
+  assert.match(text, /拿不到这一页的地址/)
+  assert.equal(findElement(noAddress, (node) => node.type === 'iframe'), null)
+})
+
 check('Chat 行渲染器：没有 data 时不渲染（不白屏、不抛）', () => {
   assert.equal(internals.ShowmePageNode({ node: {} }), null)
   assert.equal(internals.ShowmePageNode({}), null)
