@@ -938,6 +938,15 @@ check('没有地址时：画面里是那句能行动的话，不是 iframe', () 
   assert.equal(findElement(noAddress, (node) => node.type === 'iframe'), null)
 })
 
+check('Chat 行渲染器：把标准 props 里的 sessionId 转交给卡片', () => {
+  const element = internals.ShowmePageNode({
+    node: { data: { path: '.dsh/showme/x.html', title: '甲', note: '', url: '', sessionId: '', settled: true, failed: false, failureText: '' } },
+    sessionId: 'session-from-slot',
+    openFile: () => {},
+  })
+  assert.equal(element.props.sessionId, 'session-from-slot')
+})
+
 check('Chat 行渲染器：没有 data 时不渲染（不白屏、不抛）', () => {
   assert.equal(internals.ShowmePageNode({ node: {} }), null)
   assert.equal(internals.ShowmePageNode({}), null)
