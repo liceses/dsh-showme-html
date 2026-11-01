@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.2.3-blue.svg)
+![Version](https://img.shields.io/badge/version-0.2.4-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -115,6 +115,7 @@ npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / �
 | 那个 skill 和插件什么关系 | [`showme-report` 与 DSH 的关系](#skill) |
 | 它到底怎么实现的 | [工作原理](#how) |
 | 页面里的脚本能干什么 | [安全模型](#security) |
+| 卡片为什么不会被折叠 | [卡片在哪一行](#chat-row) |
 | 有什么坑 | [已知限制](#limits) |
 | 想改代码 | [仓库结构](#layout) · [开发](#dev) |
 | 许可 | [许可](#license) |
@@ -177,7 +178,7 @@ agent 干完一件大事，甩给你 200 行 Markdown。你读完了，但你没
 |---|---|
 | **工具 `show_html`** | agent 调一下，就等于"把这一页给用户看"。参数只有 `path` / `title` / `note`；**不收 HTML 正文**——正文进参数会白烧一遍 token，而且页面会被反复改，留成文件才可迭代、可留档。 |
 | **镜像读路由** | `GET /api/showme/raw/<sessionId>/<工作区相对路径>`。按工作区目录结构分发，于是页面里的**相对引用天然可用**（`<img src="stills/a.png">`、预设 CSS、下级页），**同一个地址就是「在浏览器打开原文件」**。 |
-| **对话内卡片** | 标题 / 体积 / **侧栏打开** / 刷新 / 全屏 / 浏览器打开；**非可见的卡片不持有活 iframe**（历史里几十张卡片不会把会话拖卡）。 |
+| **对话内卡片** | 标题 / 体积 / **侧栏打开** / 刷新 / 全屏 / 浏览器打开；**非可见的卡片不持有活 iframe**（历史里几十张卡片不会把会话拖卡）。卡片是一条**独立的 Chat 行**，不在「工作步骤」过程组里 —— 轮次结束、工具调用被收起时它仍然看得见（见 [卡片在哪一行](#chat-row)）。 |
 | **侧栏打开** | 把这一页放进**原生右侧栏**（插件自己注册的页 tab 类型 `showme-page`，正文就是同一个镜像地址的 iframe）；右栏服务不在时兜底到新标签页并说明。**不认领任何后缀**——`.html` 的默认归宿仍然是原生 `builtin` 预览。 |
 | **画面内全屏** | 走框架级浮层，Esc 退出回到原位、滚动位置不丢。**控件全在底部**：Windows 桌面端顶部 40px 是原生窗口按钮、画在网页之上，放在那里永远点不到（这条是踩过的现场）。 |
 | **反馈两条路** | ① 页面 `postMessage` 给卡片 → 一键填入输入框；② 页面 `POST /api/showme/feedback` 追加到 `<工作区>/.dsh/showme/inbox.jsonl`。都不实现也不影响——页面里的可选中文本本来就是通用交换格式。 |
@@ -433,6 +434,38 @@ templates/core.js        内核：渲染与交互全在这里，三个形状共�
 
 ---
 
+<a id="chat-row"></a>
+## 卡片在哪一行（为什么它不会被「工作步骤」折叠吃掉）
+
+DSH 的「工作步骤展示」有两档行为：完成的轮次会把**整个过程组**收起来（简洁 / 标准 / 详细都收，
+只有「完全展开」不收）。折叠不是 CSS，而是 chat 在 `TurnGroups.rebuild()` 里按
+`isAtOrOutside(node, 'process')` 切分——**只有 `groupTree` 深度 ≤ `process` 的节点才不进组**。
+深度表是 `exchange:0 / input:1 / turn:2 / process:3`，而工具调用行不声明 `groupTree`，
+默认就落在 `process` 上。
+
+所以 0.2.3 及更早的卡片（挂在 `tool.call.toolview` 槽位里、长在工具行内部）在轮次结束后
+会被一层层折掉：用户要展开「工作步骤」→ 再展开某一组 → 才看得到页面。
+
+0.2.4 起改成**一条自己的 Chat 行**：
+
+```
+ctx.inject(['uiConversation'], (scope) => scope.uiConversation.events.register(showmePageDefinition))
+ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({ name: 'conversation.chat.node', key: 'showme-page' }, ShowmePageNode))
+```
+
+节点里 `groupTree: 'turn'`（深度 2 ≤ 3）→ 不进过程组 → **折叠与它无关**。
+DSH 自己的错误行（`turn-error`）用的就是同一招。工具行留着，但只剩一行摘要
+（标题 / 体积 / 「页面在下方」/ 侧栏打开 / 浏览器打开），不再内嵌 iframe。
+
+顺序是 `过程组 → 卡片 → 后续过程组 → 回答`：卡片紧跟它对应的那次调用，
+所以一轮里调两次 `show_html` 就是两张卡，各自在各自的位置。
+
+> **旧宿主怎么办**：`uiConversation` 是可选注入。服务不在（0.1.7-rc 线、更老的 0.2.x）时
+> 整段不执行，`conversationRowsEnabled` 保持 false，工具行退回 0.2.3 的内嵌整卡行为。
+> 换句话说：新宿主更好用，旧宿主不变。
+
+---
+
 <a id="security"></a>
 ## 安全模型（两层，刻意不同）
 
@@ -501,7 +534,7 @@ templates/core.js        内核：渲染与交互全在这里，三个形状共�
 lib/index.js          宿主半区：show_html 工具 + 镜像读路由 + 反馈落盘 + 预设落地 + vendor 路由
 lib/mermaid-check.js  宿主侧 mermaid 语法预检（node:vm + dompurify 单点补丁）
 lib/mermaid-boot.js   注入页面的引导脚本：加载 mermaid、逐块渲染、导出 PNG、回报执
-lib/client.js         浏览器半区：对话卡片 + 画面内全屏 + 输入框镜像（closure-factory）
+lib/client.js         浏览器半区：对话卡片 + Chat 行定义 + 画面内全屏 + 输入框镜像（closure-factory）
 styles/*.css          四套预设样式（插件资产，宿主动态落地到工作区）
 styles/index.json     预设清单：一行 default 就是默认皮肤
 templates/            三份骨架 + core.js（插件资产，同样动态落地）

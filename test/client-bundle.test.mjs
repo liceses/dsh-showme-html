@@ -182,6 +182,8 @@ const registrations = []
 const serviceInjections = []
 /** 记录右栏导航调用。 */
 const openTabCalls = []
+/** 记录 `uiConversation.events.register()` 收到的 Chat 行定义。 */
+const chatRowRegistrations = []
 /** 右栏导航入口：默认可用；用例可以临时拿掉它验证兜底。 */
 const fakeSidebarRight = {
   openTab: (kind, options) => {
@@ -195,7 +197,19 @@ const fakeCtx = {
   },
   inject: (deps, callback) => {
     serviceInjections.push(deps)
-    callback({ effect: fakeCtx.effect, slots: fakeCtx.slots, sidebarRightTabs: fakeSidebarTabs, sidebarRight: fakeSidebarRight })
+    // 按服务名给对应能力：缺哪个就是"旧宿主没有这个服务"的现场。
+    const scope = { effect: fakeCtx.effect, slots: fakeCtx.slots, sidebarRightTabs: fakeSidebarTabs, sidebarRight: fakeSidebarRight }
+    if (deps.includes('uiConversation')) {
+      scope.uiConversation = {
+        events: {
+          register: (definition) => {
+            chatRowRegistrations.push(definition)
+            return () => {}
+          },
+        },
+      }
+    }
+    callback(scope)
   },
   slots: {
     inject: (name, callback) => {
@@ -231,11 +245,12 @@ check('三处 inject 的目标槽位都对', () =>
     'tool.call.toolview',
     'shell.overlay',
     'conversation.input.left',
+    'conversation.chat.node',
     'sidebar.right.pane.tab',
   ]),
 )
 check('右栏那两个服务是按「可选能力」接的，不在 exports.inject 里', () => {
-  assert.deepEqual(plain(serviceInjections), [['sidebarRightTabs', 'sidebarRight']])
+  assert.deepEqual(plain(serviceInjections), [['uiConversation'], ['sidebarRightTabs', 'sidebarRight']])
   assert.deepEqual(plain(plugin.inject), ['slots'], '插件本体不该硬依赖右栏服务')
 })
 check('注册了右栏的**页类型**：自己的 kind，且不认领任何后缀', () => {
@@ -411,7 +426,9 @@ check('两处都没有：返回 false 而不是抛', () => {
 
 console.log('\n[卡片] 早退与错误态')
 
-const card = registrations.find((entry) => entry.registration.name === 'tool.call.toolview').component
+// 卡片本体：直接拿 `internals.ToolCard`（注册进 tool.call.toolview 的是 `ShowmeToolRow`，
+// 它在新宿主上会退化成一行摘要 —— 摘要另有专测见文末"Chat 行"一节）。
+const card = internals.ToolCard
 
 /** 在对象树里按深度优先找一个满足条件的元素。 */
 function findElement(node, predicate) {
@@ -720,6 +737,149 @@ check('没进全屏时：不渲染、不监听', () => {
   assert.equal(fullscreen({}), null)
   assert.equal(runEffects().length, 0)
   assert.equal(keyListeners.window.length, 0)
+})
+
+// ══════════════ Chat 行（让页面不被「工作步骤」折叠吃掉）══════════════
+
+console.log('\n[Chat 行]')
+
+check('注册了 Chat 行定义：kind 走 conversation.chat.node，target 是 chat', () => {
+  assert.equal(chatRowRegistrations.length, 1)
+  const definition = chatRowRegistrations[0]
+  assert.equal(definition.kind, internals.SHOWME_KIND)
+  assert.equal(definition.target, 'chat')
+  assert.equal(typeof definition.buildViewNode, 'function')
+})
+
+check('渲染器按 kind 注册进 conversation.chat.node', () => {
+  const node = registrations.find((entry) => entry.registration.name === 'conversation.chat.node')
+  assert.ok(node !== undefined, '没有注册 conversation.chat.node')
+  assert.equal(node.registration.key, internals.SHOWME_KIND)
+  assert.equal(node.component, internals.ShowmePageNode)
+})
+
+check('工具行注册的是摘要组件（不是整张卡片）', () => {
+  const row = registrations.find((entry) => entry.registration.name === 'tool.call.toolview')
+  assert.equal(row.component, internals.ShowmeToolRow)
+})
+
+// 定义必须**只**认 show_html：抢了别的工具的行，就等于把它们的输出也搬出过程组。
+const chatRow = chatRowRegistrations[0]
+const callEvent = (name, callId = 'c1') => ({ type: 'tool/call', seq: 10, data: { name, callId, arguments: '{}' } })
+const resultEvent = (name, callId = 'c1') => ({
+  type: 'tool/result',
+  seq: 11,
+  data: {
+    message: { source: { name, callId }, content: [{ type: 'text', text: 'ok' }], isError: false },
+    meta: { bytes: 42, url: '/api/showme/raw/session-abc/.dsh/showme/x.html' },
+  },
+})
+
+check('只认 show_html 的 tool/call 与 tool/result', () => {
+  assert.ok(chatRow.match(callEvent('show_html')) !== null)
+  assert.ok(chatRow.match(resultEvent('show_html')) !== null)
+  assert.equal(chatRow.match(callEvent('bash')), null)
+  assert.equal(chatRow.match(resultEvent('bash')), null)
+})
+
+check('按 callId 归并：call 是 start，result 是 update', () => {
+  assert.deepEqual(plain(chatRow.match(callEvent('show_html', 'c9'))), { id: 'c9', role: 'start' })
+  assert.deepEqual(plain(chatRow.match(resultEvent('show_html', 'c9'))), { id: 'c9', role: 'update' })
+})
+
+// ★ 这一条是整个方案的地基：groupTree 一旦不是 turn（或更外层），卡片会掉回过程组被折叠。
+const rowState = chatRow.start({}, { event: resultEvent('show_html'), id: 'c1', role: 'start' })
+const chatRowNode = chatRow.buildViewNode({
+  state: rowState,
+  key: 'k1',
+  id: 'c1',
+  start: { location: { kind: 'turn' } },
+})
+check('节点声明 groupTree = turn（深度 2 ≤ process 3 → 不进过程组）', () => {
+  assert.equal(chatRowNode.groupTree, 'turn')
+})
+check('节点字段齐全：key/kind/id/target/anchorSeq/visibility', () => {
+  assert.equal(chatRowNode.key, 'k1')
+  assert.equal(chatRowNode.id, 'c1')
+  assert.equal(chatRowNode.kind, internals.SHOWME_KIND)
+  assert.equal(chatRowNode.target, 'chat')
+  assert.equal(chatRowNode.anchorSeq, 11, '落在结果事件的位置，不推到轮次末尾')
+  assert.equal(chatRowNode.visibility, 'visible')
+  assert.deepEqual(plain(chatRowNode.location), { kind: 'turn' })
+})
+
+check('节点数据 = 卡片要的东西（含 meta 里的字节数与地址）', () => {
+  assert.equal(chatRowNode.data.path, '')
+  assert.equal(chatRowNode.data.bytes, 42)
+  assert.equal(chatRowNode.data.url, '/api/showme/raw/session-abc/.dsh/showme/x.html')
+  assert.equal(chatRowNode.data.sessionId, 'session-abc', '会话 id 从地址里解，节点视图拿不到 props.sessionId')
+})
+
+check('tool/call 阶段也能建行（参数已到，结果还没到）', () => {
+  const early = chatRow.start({}, {
+    event: {
+      type: 'tool/call',
+      seq: 5,
+      data: {
+        name: 'show_html',
+        callId: 'c2',
+        arguments: '{"path":".dsh/showme/a.html","title":"甲"}',
+      },
+    },
+    id: 'c2',
+    role: 'start',
+  })
+  assert.equal(early.path, '.dsh/showme/a.html')
+  assert.equal(early.title, '甲')
+  assert.equal(early.settled, false)
+  const earlyNode = chatRow.buildViewNode({ state: early, key: 'k2', id: 'c2', start: { location: { kind: 'turn' } } })
+  assert.equal(earlyNode.data.title, '甲')
+})
+
+check('sessionIdFromUrl：各种形态都不炸', () => {
+  assert.equal(internals.sessionIdFromUrl('/api/showme/raw/session-a/b/c.html'), 'session-a')
+  assert.equal(internals.sessionIdFromUrl('/api/showme/raw/session-a/b/c.html?v=3'), 'session-a')
+  assert.equal(internals.sessionIdFromUrl(''), '')
+  assert.equal(internals.sessionIdFromUrl('http://x/other'), '')
+})
+
+// 摘要行：新宿主上工具行只剩一行（不再内嵌 iframe）
+const rowTree = internals.ShowmeToolRow({
+  block: {
+    kind: 'tool-result',
+    call: { name: 'show_html', argsRaw: '{"path":".dsh/showme/x.html","title":"评审"}' },
+    meta: { bytes: 2048, url: '/api/showme/raw/session-abc/.dsh/showme/x.html' },
+    content: [{ type: 'text', text: 'ok' }],
+    isError: false,
+  },
+  sessionId: 's',
+  openFile: () => {},
+})
+check('工具行摘要：标题 + 体积 + "页面在下方"，且没有 iframe', () => {
+  const text = textOf(rowTree)
+  assert.match(text, /评审/)
+  assert.match(text, /2\.0 KB/)
+  assert.match(text, /页面在下方/)
+  assert.equal(findElement(rowTree, (node) => node.type === 'iframe'), null, '整页 iframe 应该在 Chat 行里，不在工具行')
+})
+
+check('缺少 uiConversation 的宿主：不注册 Chat 行（旧宿主照旧内嵌卡片）', () => {
+  const before = chatRowRegistrations.length
+  let injectedWithoutService = 0
+  const bare = {
+    effect: (fn) => {
+      const disposer = fn()
+      return typeof disposer === 'function' ? disposer : () => {}
+    },
+    // cordis 的真实语义：依赖的服务一个都没有时，回调**根本不会被调用**。
+    inject: () => {
+      injectedWithoutService += 1
+    },
+    slots: { inject: (_name, callback) => callback(), register: () => () => {} },
+  }
+  plugin.apply(bare)
+  assert.ok(injectedWithoutService >= 1, '应该尝试注入过（只是服务不在）')
+  assert.equal(chatRowRegistrations.length, before, '没有 uiConversation 时不该注册 Chat 行')
 })
 
 await Promise.all(asyncChecks)

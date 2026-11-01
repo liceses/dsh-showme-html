@@ -1,5 +1,41 @@
 # 变更记录
 
+## 0.2.4 — 2026-11-01
+
+**页面卡片不再被「工作步骤」折叠吃掉 —— 它现在是一条独立的 Chat 行。**
+
+### 修
+
+- DSH 新版加了「工作步骤展示」：完成的轮次会把**整个过程组**收起来（简洁 / 标准 / 详细三档都收，
+  只有「完全展开」不收）。卡片原来长在工具行内部（`tool.call.toolview`），工具行属于过程组，
+  于是整页卡片被一起折掉 —— 用户得展开「工作步骤」→ 再展开某一组才找得到页面。
+- 根因不是 CSS，是 chat 的分组规则：`TurnGroups.rebuild()` 按 `isAtOrOutside(node, 'process')`
+  切分，**只有 `groupTree` 深度 ≤ `process` 的节点才不进组**（`exchange:0 / input:1 / turn:2 / process:3`）。
+  工具调用行不声明 `groupTree`，默认就落在 `process` 上。
+
+### 加
+
+- **自家的 Chat 行**：`ctx.uiConversation.events.register()` 注册一条 `kind: 'showme-page'` 的行定义，
+  渲染器挂在 `conversation.chat.node` 槽位（key = kind）。节点声明 **`groupTree: 'turn'`**
+  （深度 2 ≤ 3）→ 不进过程组 → 折叠与它无关。DSH 自己的错误行（`turn-error`）用的就是同一招。
+- 行数据从会话事件投影出来：`tool/call` 取参数、`tool/result` 取 `meta`（就是 `presentationMeta()`
+  写的 `{ bytes, url }`）与错误态；会话 id 从地址里解（节点视图拿不到 `props.sessionId`）。
+- 工具行降为**一行摘要**（标题 / 体积 / 「页面在下方」/ 侧栏打开 / 浏览器打开），不再内嵌 iframe。
+- 旧宿主的兼容：`uiConversation` 是**可选注入**，服务不在时整段不执行、工具行原样内嵌整卡。
+
+### 实测
+
+- 离线断言 **330 项全绿**（清单 7 / 宿主 116 / mermaid 35 / **客户端 64** / 预设 38 / 模板 33 / 页面 37）。
+  客户端新增 12 条：只认 `show_html`、`groupId` 归并、`groupTree === 'turn'`、`anchorSeq` 落点、
+  `meta` 落地、从地址解会话 id、摘要行没有 iframe、缺 `uiConversation` 时不注册。
+- `doctor` 的 `[5]` 在运行中的实例上核到新 bundle（25 个类名）。
+
+### 已知边界
+
+- 卡片位置跟着**调用结果**走（不是轮次末尾）：一轮里调两次 `show_html`，过程组会被切成
+  `组 → 卡片 → 组 → 卡片 → 回答`。这是刻意的 —— 卡片要贴着它对应的那次调用。
+- 只有 `show_html` 这么搬。其它工具（bash / read / edit …）照旧在过程组里折叠。
+
 ## 0.2.3 — 2026-11-01
 
 **0.2.2 的补丁版：只补文档与截图，代码一行未改。**
