@@ -10,7 +10,7 @@
 
 import assert from 'node:assert/strict'
 import { request as httpRequest, createServer } from 'node:http'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { mkdtemp, mkdir, readFile, readdir, symlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir, homedir } from 'node:os'
 import { join, dirname } from 'node:path'
@@ -1018,6 +1018,44 @@ check('frontmatter 能被拆出来', () => {
   assert.ok(meta.whenToUse.length > 10, 'whenToUse 没解析到')
   assert.ok(!body.startsWith('---'), '正文里还留着 frontmatter 分隔符')
   assert.match(body, /^#\s/m, '正文应当从标题开始')
+})
+
+check('skill 是索引不是手册：正文 ≤230 行，五份 references 齐且被指到', () => {
+  const skillDir = join(here, '..', 'skill', 'showme-report')
+  const lines = realSkill.split(String.fromCharCode(10)).length
+  assert.ok(lines <= 230, `SKILL.md 有 ${lines} 行，超了 230 行的预算（细节挪进 references/）`)
+  assert.ok(Buffer.byteLength(realSkill, 'utf8') <= 16 * 1024, 'SKILL.md 超过 16KB')
+  for (const name of ['templates', 'layout', 'mermaid', 'sandbox', 'checklist']) {
+    const text = readFileSync(join(skillDir, 'references', `${name}.md`), 'utf8')
+    assert.ok(text.length > 800, `references/${name}.md 太短，像占位`)
+    assert.ok(realSkill.includes(`references/${name}.md`), `SKILL.md 里没有指向 references/${name}.md`)
+  }
+})
+
+check('代码与文档里引用的 skill §编号，SKILL.md 里都还在', () => {
+  const root = join(here, '..')
+  const files = [
+    'lib/index.js', 'lib/client.js', 'templates/core.js', 'templates/README.md', 'README.md',
+    'styles/soft.css', 'styles/swiss.css', 'styles/brutal.css', 'styles/blueprint.css',
+  ]
+  const found = new Set()
+  for (const rel of files) {
+    let text
+    try {
+      text = readFileSync(join(root, rel), 'utf8')
+    } catch {
+      continue
+    }
+    for (const m of text.matchAll(/skill\s*§\s*(\d+)(?:\.(\d+))?/g)) {
+      found.add(m[2] ? `${m[1]}.${m[2]}` : m[1])
+    }
+  }
+  assert.ok(found.size > 0, '一个 skill § 引用都没找到，这条守卫失效了')
+  for (const num of found) {
+    const pattern = num.includes('.') ? new RegExp(`^### ${num.replace('.', '\.')}(?![0-9])`, 'm')
+      : new RegExp(`^## ${num}(?!\.\d)(?![0-9])`, 'm')
+    assert.ok(pattern.test(realSkill), `文件里引用了 skill §${num}，但 SKILL.md 里没有对应的标题`)
+  }
 })
 
 check('没有 frontmatter 时退化为全文，不抛', () => {

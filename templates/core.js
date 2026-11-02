@@ -846,7 +846,7 @@
         render(window.SHOWME)
       } catch (error) {
         fail('渲染出错：' + (error && error.message ? error.message : String(error)), [
-          '多半是数据的字段写错了；对照 skill §5 的字段表核对一遍。',
+          '多半是数据的字段写错了；对照 templates/README.md 的字段表核对一遍。',
         ])
       }
       return
@@ -867,7 +867,7 @@
         render(window.SHOWME)
       } catch (error) {
         fail('渲染出错：' + (error && error.message ? error.message : String(error)), [
-          '多半是数据的字段写错了；对照 skill §5 的字段表核对一遍。',
+          '多半是数据的字段写错了；对照 templates/README.md 的字段表核对一遍。',
         ])
       }
     }

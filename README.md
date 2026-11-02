@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.3.1-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -389,6 +389,22 @@ templates/core.js        内核：渲染与交互全在这里，三个形状共�
 | 上面那个**不在** | `ctx.skills.register({ name, description, whenToUse, source: 'runtime', content, resourceBase })` | `registered` —— 保证"装了这个插件就有这个 skill" |
 | 拿不到 `skills` 服务，或缺 frontmatter | 记一笔，不拖垮插件本体 | `unavailable` |
 
+**skill 是索引，不是手册**（0.3.1 起）：`SKILL.md` 只留"不钉就会错"的硬契约（215 行），
+字段表、版式标记、mermaid、沙箱、自检各自一份放进 `references/`，模型**按需再读**。
+
+| 读什么 | 什么时候 |
+|---|---|
+| `SKILL.md` | 永远（唯一的入口） |
+| `references/templates.md` | 要查字段 / 块类型 / 报错含义 |
+| `references/layout.md` | 自己写页面但用预设皮肤 |
+| `references/mermaid.md` | 画流程图 / 时序图 |
+| `references/sandbox.md` | 页面要用存储 / 剪贴板 / 表单 |
+| `references/checklist.md` | 交付前自检 |
+
+为什么改：旧版 526 行一套读完才动手，读的是它一时用不到的版式与坑；
+现在入口只有一屏多，细节在真的需要时再展开。`npm test` 里有两条守卫盯着这件事
+（正文 ≤230 行、五份 references 都存在且被指到；以及"代码与文档里引用的 `skill §N` 必须真在 SKILL.md 里"）。
+
 **兜底不是锦上添花，是必需**：联接在仓库之外，任何一次清理都可能把它悄悄弄丢，
 而症状只是"模型不再加载 skill"——从外面完全看不出来。这个仓库**真的被咬过一次**。
 `npm run doctor` 的第 2 段就是专门盯这一环的（它还会比对联接两侧内容是否一致）。
@@ -612,7 +628,7 @@ styles/*.css          四套预设样式（插件资产，宿主动态落地到�
 styles/index.json     预设清单：一行 default 就是默认皮肤
 templates/            三份骨架 + core.js（插件资产，同样动态落地）
 vendor/mermaid.min.js mermaid 12.2.0 的 dist 单文件（5.49 MB，sha256 钉在 vendor/README.md）
-skill/showme-report/  产品核心：功能契约 + 交换格式 + 沙箱坑
+skill/showme-report/  产品核心：SKILL.md（索引，215 行）+ references/（字段表、版式、mermaid、沙箱、自检五份，按需读）
 examples/             示例页源码（页面冒烟测试的夹具；mermaid-demo / mermaid-types 是截图的原件）
 test/                 离线验收：清单 / 宿主 / mermaid / 客户端 / 预设 / 模板 / 页面 七组
 tools/                维护脚本：vendor:mermaid · assets:refresh · asar:list · asar:scan
@@ -627,7 +643,7 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 411 项离线断言：清单 7 / 宿主 140 / mermaid 35 / 客户端 87 / 预设 38 / 模板 67 / 页面 37
+npm test                # 413 项离线断言：清单 7 / 宿主 142 / mermaid 35 / 客户端 87 / 预设 38 / 模板 67 / 页面 37
                         # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 412）
 
 npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区** / 落地副本
