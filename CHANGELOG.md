@@ -1,5 +1,35 @@
 # 变更记录
 
+## 0.3.6 — 2026-11-03
+
+**plan 模式展示页：把两套打开器合成一条链路（`docs/plan-mode-showme-flow.md` 里 11 条缺陷的 P0/P1 部分）。**
+
+用户报「plan 模式的 showme page 的行为逻辑有问题」，复核后确认全中（双开、页面晚到不开、按钮显示「路径不存在」、
+窗口窄也照开、改一版计划又开一个 tab）。这一版改的是**打开页这件事的骨架**，不是补丁：
+
+- **唯一入口 `openShowmePageOnce(sessionId, workspacePath, { title, manual, retrying })`**：卡片自动开、评审自动开、
+  人点按钮都走它。返回值说清楚为什么没开：`opened` / `window` / `already` / `narrow` / `missing` /
+  `no-session` / `failed` / `invalid`。
+- **一套去重键**：`pageOpenKey()` = 会话 + **归一化**路径（`normalizeWorkspacePath()` 处理反斜杠、`./`、前导斜杠、
+  重复斜杠、包裹的引号/反引号，并拒绝 `D:\…` 这类绝对路径）。`autoOpen.opened` 与 `planOpened` 两个集合删掉，
+  换成按这个键记录的 `pageOpenStatus`。同一页在两条路径之间只会被自动开一次；「要求修改」发新 `requestKey`
+  也不会再开第二个 tab。
+- **先成功、后记账**：以前 `planOpened.add(key)` 在打开之前，页面晚落盘（HEAD 404）就永久不开。
+  现在是成功之后才 `markPageOpened()`；失败（404）进 `schedulePageRetry()`，1s 一次、最多 10 次，
+  页面出现就开。
+- **并发也只开一个**：自动路径在 `HEAD` 之前先写 `pending`，第二个并发调用直接拿 `already`。
+- **两条路径共用一张门**：`pageOpenGate({ status, manual, width, retrying })` 是纯函数 —— 宽度闸
+  （`PAGE_OPEN_MIN_WIDTH = 1200`）以前只在卡片路径上有，现在评审路径也过；`manual: true`（人点的按钮）跳过
+  去重与宽度。
+- **评审路径补上会话 id 兜底**：`PlanPageAction` 改用 `resolveSessionId(null, props.sessionId)`（与卡片同一套
+  三级兜底：props → source → `inputRefs`），以前空 id 会让按钮显示「路径不存在」。
+- **标记行解析放宽**：`parsePlanPagePath()` 认 `- 展示页：` / `1. 展示页：` / 反引号或引号包裹 / 行尾说明
+  （`（这一版的对比）`、` <workspace-relative path>`），**只取第一个命中**（正文里举例的路径不算交付物）。
+  宿主那段指引也从「写在第一段」改成「单独一行（最好在第一段）」，与"只认第一条"对齐。
+- 顺带把 `autoOpen` 里的绝对地址换算、`sessionIdFromUrl` 兜底键删了 —— 键已经不含地址。
+
+断言 431 → **437**（客户端 94 → 100：门函数、键归一化、标记解析三组纯函数用例 + 双开/晚到两条行为用例）。
+
 ## 0.3.5 — 2026-11-03
 
 **仓库内新增一个 agent 预设：Showme Often —— 选中它的会话，回答默认是一页。**

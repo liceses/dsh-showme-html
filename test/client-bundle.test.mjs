@@ -132,6 +132,8 @@ function recordingTarget(bucket) {
 
 /** 记录 window.open 的调用（P1 的兜底通道）。 */
 const windowOpens = []
+/** 记录代码排的定时器（自动开页的重试要验"排了没"）。 */
+const scheduledTimers = []
 
 const windowTarget = recordingTarget(keyListeners.window)
 const documentTarget = recordingTarget(keyListeners.document)
@@ -151,6 +153,14 @@ const fakeWindow = {
   removeEventListener: windowTarget.removeEventListener,
   // 浏览器里一定有这两个；"侧栏打开"要把镜像地址绝对化，靠的就是它们。
   location: { href: 'http://localhost/session/s' },
+  // 自动开右栏的宽度闸要读它；测试里改来改去，所以是普通属性。
+  innerWidth: 1400,
+  // 重试计时器只记账、不真跑：用例自己决定什么时候"过一秒"。
+  setTimeout: (fn, ms) => {
+    scheduledTimers.push({ fn, ms })
+    return scheduledTimers.length
+  },
+  clearTimeout: () => {},
   focus: () => {
     focusCalls.count += 1
   },
@@ -1206,11 +1216,57 @@ check('路径不存在时不打开（返回 missing）', async () => {
   assert.equal(await internals.openShowmePage('s', 'missing.html'), 'missing')
 })
 
+check('同一页只自动开一次：两条路径共用同一个键', async () => {
+  const mine = () => openTabCalls.filter((call) => String(call.options?.params?.url).includes('/raw/dedupe/'))
+  assert.equal(await internals.openShowmePageOnce('dedupe', '.dsh/showme/d.html', {}), 'opened')
+  assert.equal(await internals.openShowmePageOnce('dedupe', '.dsh//showme/d.html', {}), 'already', '换根写法也应当是同一页')
+  assert.equal(mine().length, 1, '本会话这一页只应该有一个 tab')
+})
+
+check('开页的门：去重 / 宽度 / 重试放行 —— 纯函数，两条路径共用', () => {
+  assert.equal(internals.pageOpenGate({ status: 'opened' }), 'already')
+  assert.equal(internals.pageOpenGate({ status: 'pending' }), 'already', '并发的第二次不该再开')
+  assert.equal(internals.pageOpenGate({ status: 'pending', retrying: true }), '', '重试要放行')
+  assert.equal(internals.pageOpenGate({ status: undefined, width: 900 }), 'narrow')
+  assert.equal(internals.pageOpenGate({ status: undefined, width: 1400 }), '')
+  assert.equal(internals.pageOpenGate({ status: 'opened', manual: true }), '', '人点的按钮不受去重限制')
+})
+
+check('会话还没就绪 / 路径不可用：给能说清楚的原因，不猜', async () => {
+  assert.equal(await internals.openShowmePageOnce('', '.dsh/showme/x.html', {}), 'no-session')
+  assert.equal(await internals.openShowmePageOnce('s', '', {}), 'invalid')
+  assert.equal(await internals.openShowmePageOnce('s', 'D:\\abs\\x.html', { manual: true }), 'invalid')
+})
+
+check('页面还没落盘：不记账（不占位），排一次 1s 重试', async () => {
+  scheduledTimers.length = 0
+  const how = await internals.openShowmePageOnce('retry', '.dsh/showme/missing.html', {})
+  assert.equal(how, 'missing')
+  assert.equal(internals.pageOpenStatus.get('retry|.dsh/showme/missing.html'), 'pending')
+  assert.ok(scheduledTimers.some((timer) => timer.ms === 1000), '没排重试')
+})
+
 check('计划页标记行能解析出来', () => {
   const plan = '# 计划\n\n目标……\n展示页：.dsh/showme/plan.html\n'
-  const match = internals.PLAN_PAGE_MARKER.exec(plan)
-  assert.ok(match !== null, '没解析到展示页行')
-  assert.equal(match[1], '.dsh/showme/plan.html')
+  assert.equal(internals.parsePlanPagePath(plan), '.dsh/showme/plan.html')
+})
+
+check('计划页标记行：反引号 / 列表符 / 行尾说明都认，且只认第一个', () => {
+  assert.equal(internals.parsePlanPagePath('- 展示页：`.dsh/showme/a.html`'), '.dsh/showme/a.html')
+  assert.equal(internals.parsePlanPagePath('1. 展示页：.dsh/showme/b.html（这一版的对比）'), '.dsh/showme/b.html')
+  const two = '展示页：.dsh/showme/first.html\n\n举个例子：展示页：.dsh/showme/second.html'
+  assert.equal(internals.parsePlanPagePath(two), '.dsh/showme/first.html', '第二个命中不该顶掉第一个')
+  assert.equal(internals.parsePlanPagePath('没有标记'), '')
+})
+
+check('路径归一化与开页身份键', () => {
+  assert.equal(internals.normalizeWorkspacePath('.\\dsh\\showme\\x.html'), 'dsh/showme/x.html')
+  assert.equal(internals.normalizeWorkspacePath('./.dsh/showme/x.html'), '.dsh/showme/x.html')
+  assert.equal(internals.normalizeWorkspacePath('/.dsh/showme/x.html'), '.dsh/showme/x.html')
+  assert.equal(internals.normalizeWorkspacePath('`.dsh/showme/x.html`'), '.dsh/showme/x.html')
+  assert.equal(internals.normalizeWorkspacePath('D:\\x\\y.html'), '', '绝对路径不该被当成工作区相对路径')
+  assert.equal(internals.pageOpenKey('s1', '.dsh/showme/x.html'), 's1|.dsh/showme/x.html')
+  assert.equal(internals.pageOpenKey('', 'x.html'), '')
 })
 
 check('评审里没有标记行 → 不渲染任何东西（不留死按钮）', () => {
