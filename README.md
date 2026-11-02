@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.2.8-blue.svg)
+![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -116,6 +116,7 @@ npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / �
 | 它到底怎么实现的 | [工作原理](#how) |
 | 页面里的脚本能干什么 | [安全模型](#security) |
 | 卡片为什么不会被折叠 | [卡片在哪一行](#chat-row) |
+| 自动开右栏 / 计划页怎么设 | [设置](#settings) · [计划页](#plan-page) |
 | 刷新会不会丢我填的东西 | [刷新 / 切会话不丢](#draft) |
 | 有什么坑 | [已知限制](#limits) |
 | 想改代码 | [仓库结构](#layout) · [开发](#dev) |
@@ -309,6 +310,7 @@ skill 用文字规定"回执怎么做"，模型每次都重新实现一遍，于
 | 骨架 | 形状 | 什么时候用 |
 |---|---|---|
 | `review.html` | 逐项表态 | 纯文字的条目排成一行一条，带图的单独成卡；每条一个判定 + 备注。**最常用** |
+| `doc.html` | 纯文档 | 没有判定控件、没有回执——长说明、机制讲解用它，别硬塞 `review`。只有一个「复制全文」。 |
 | `pick.html` | 候选挑选 | 单选 / 多选。封面选哪张、这几张素材留哪几个 |
 | `report.html` | 图文汇报 | 有图 / 表 / 时间线、不需要逐项表态；每小节一个轻回执 |
 
@@ -436,6 +438,43 @@ templates/core.js        内核：渲染与交互全在这里，三个形状共�
 
 **资产是插件包里的原件，落地是 create-only**：`styles/index.json` 的 `default` 一行决定默认皮肤；
 你在工作区里改过的副本不会被覆盖。想恢复原件，删掉工作区那份再调一次 `show_html` 即可。
+
+---
+
+<a id="settings"></a>
+## 设置：展示页
+
+**设置 → 展示页**（插件注册在 `settings.section` 槽里）。三个开关，存**用户级**偏好
+`<DSH_HOME>/showme/prefs.json` —— 换工作区不用重设，因为这是这个人的展示习惯。
+
+| 设置 | 默认 | 作用 |
+|---|---|---|
+| `show_html` 之后自动在右栏打开 | 开 | 每轮只开**最后一张**（1.2s 防抖）；每个页面只自动开一次，**你手动关掉后不再抢**；窗口窄于 1200px 时不自动开 |
+| 计划页 | `offer` | `off` 只写 markdown / `offer` 复杂计划额外产一页 / `require` 一律产页（markdown 只留摘要） |
+| 计划评审出现时自动打开计划页 | 开 | 只对 markdown 里写了「展示页：<路径>」的那次评审生效 |
+
+设置页读写走 `GET|POST /api/showme/prefs`（字段白名单 + 原子写 + 30s 缓存）。
+
+---
+
+<a id="plan-page"></a>
+## 计划页：plan 模式下产出一页
+
+`/plan` 的计划本身仍然是 **markdown**（`exit_plan_mode` 的参数没变，评审面板渲染的仍是它的首行/首段）。
+计划页是它的**展开**，不是替代 —— 这样计划依旧可 diff、可审计、被 session projection 持久化。
+
+**怎么触发**
+
+1. 插件在系统提示里追加一段 `showme:plan-page`（`planPage: off` 时为空串），告诉模型：
+   涉及方案对比 / 多变体 / 证据 / 多步取舍时，额外用模板写一页，并在 markdown 第一段写一行
+   `展示页：<工作区相对路径>`。
+2. **写页面那一刻**：卡片按设置自动在右栏打开它。
+3. **评审出现那一刻**：评审 action 槽里会多一个「打开展示页」按钮，并按设置自动开一次。
+
+> ⚠️ **不要指望 markdown 里的路径变成链接**：评审面板只渲染 markdown 的首行/首段，
+> 原生文档预览那条路又会把 HTML 塞进 blob iframe（丢掉文件名，模板推导数据文件直接失败）。
+> 所以打开页面**只用插件自己的右栏页类型**，并且在打开前对镜像地址做一次 `HEAD` ——
+> 路径不存在时给一句人话（「这个路径在工作区里不存在」），**绝不打开一个空白 tab**。
 
 ---
 
@@ -588,8 +627,8 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 391 项离线断言：清单 7 / 宿主 133 / mermaid 35 / 客户端 79 / 预设 38 / 模板 62 / 页面 37
-                        # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 392）
+npm test                # 411 项离线断言：清单 7 / 宿主 140 / mermaid 35 / 客户端 87 / 预设 38 / 模板 67 / 页面 37
+                        # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 412）
 
 npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区** / 落地副本
 

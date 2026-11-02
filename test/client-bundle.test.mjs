@@ -161,11 +161,15 @@ const fakeDocument = {
   removeEventListener: documentTarget.removeEventListener,
 }
 
-/** 记录 bundle 发出的 HTTP 调用（草稿 / 反馈 / mermaid 回执）。 */
+/** 记录 bundle 发出的 HTTP 调用（草稿 / 反馈 / mermaid 回执 / 偏好 / HEAD）。 */
 const fetchCalls = []
 async function fakeFetch(url, options) {
   fetchCalls.push({ url, options })
-  return { ok: true, json: async () => ({ ok: true, draft: null }) }
+  // 让"页面不存在"这条路径可测：URL 里带 missing 就回 404。
+  if (typeof url === 'string' && url.includes('missing')) {
+    return { ok: false, status: 404, json: async () => ({ ok: false }) }
+  }
+  return { ok: true, json: async () => ({ ok: true, draft: null, prefs: {} }) }
 }
 
 const context = vm.createContext({ window: fakeWindow, document: fakeDocument, console, URL, fetch: fakeFetch })
@@ -247,9 +251,11 @@ check('注册了插件样式', () => {
   assert.ok(styles.length >= 1)
   assert.equal(styles[0].dataset.plugin, 'dsh-showme-html')
 })
-check('三处 inject 的目标槽位都对', () =>
+check('注册的槽位都对（含设置页与计划评审 action）', () =>
   assert.deepEqual(injections, [
     'tool.call.toolview',
+    'settings.section',
+    'conversation.plan-review.actions',
     'shell.overlay',
     'conversation.input.left',
     'conversation.chat.node',
@@ -1042,6 +1048,55 @@ check('页面交回的反馈由卡片补发到 /feedback（页面自己 POST 会
   const call = fetchCalls.filter((entry) => entry.url === '/api/showme/feedback').pop()
   assert.ok(call !== undefined, '没有补发反馈')
   assert.equal(JSON.parse(call.options.body).text, 'a 同意')
+})
+
+console.log('\n[设置页 / 计划页]')
+
+check('偏好：读走 GET /api/showme/prefs', async () => {
+  await internals.fetchPrefs()
+  assert.ok(fetchCalls.some((entry) => entry.url === '/api/showme/prefs' && entry.options?.method === undefined))
+})
+check('偏好：写走 POST，提交的是改动的那几项', async () => {
+  await internals.savePrefs({ planPage: 'require' })
+  const call = fetchCalls.filter((entry) => entry.url === '/api/showme/prefs' && entry.options?.method === 'POST').pop()
+  assert.ok(call !== undefined, '没有发写请求')
+  assert.deepEqual(JSON.parse(call.options.body), { planPage: 'require' })
+})
+
+check('打开前 HEAD 一下：存在才开', async () => {
+  assert.equal(await internals.pageExists('/api/showme/raw/s/p.html'), true)
+  assert.equal(await internals.pageExists('/api/showme/raw/s/missing.html'), false)
+})
+check('路径不存在时不打开（返回 missing）', async () => {
+  assert.equal(await internals.openShowmePage('s', 'missing.html'), 'missing')
+})
+
+check('计划页标记行能解析出来', () => {
+  const plan = '# 计划\n\n目标……\n展示页：.dsh/showme/plan.html\n'
+  const match = internals.PLAN_PAGE_MARKER.exec(plan)
+  assert.ok(match !== null, '没解析到展示页行')
+  assert.equal(match[1], '.dsh/showme/plan.html')
+})
+
+check('评审里没有标记行 → 不渲染任何东西（不留死按钮）', () => {
+  const node = internals.PlanPageAction({ review: { plan: '# 计划\n\n只有 markdown' }, requestKey: 'k', sessionId: 's' })
+  assert.equal(node, null)
+})
+check('评审里有标记行 → 给出「打开展示页」按钮', () => {
+  const node = internals.PlanPageAction({
+    review: { plan: '# 计划\n\n展示页：.dsh/showme/plan.html' },
+    requestKey: 'k1',
+    sessionId: 's',
+  })
+  assert.ok(node !== null, '没有渲染按钮')
+  assert.equal(node.type, 'button')
+  assert.equal(typeof node.props.onClick, 'function')
+})
+
+check('设置页：拿不到偏好时给一句"读取偏好…"，不白屏', () => {
+  const node = internals.ShowmeSettings({})
+  assert.ok(node !== null, '设置页返回了 null')
+  assert.match(JSON.stringify(node), /读取偏好/)
 })
 
 await Promise.all(asyncChecks)

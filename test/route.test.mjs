@@ -90,7 +90,7 @@ try {
 }
 
 /** 捕获 apply() 注册的东西。 */
-const captured = { route: null, tool: null }
+const captured = { route: null, tool: null, promptSections: [] }
 const services = {
   // 真实契约：`sessions.get(id)` 返回 Session，暴露的是 `header.cwd`（**没有 meta**）。
   // meta-session 是刻意留的形状容忍用例。
@@ -128,6 +128,15 @@ const fakeCtx = {
   tools: {
     register: (definition) => {
       captured.tool = definition
+      return () => {}
+    },
+  },
+  // 计划页指引走 systemPrompt.section；这里收下定义，供用例直接求值。
+  inject: (names, callback) => callback(fakeCtx),
+  systemPrompt: {
+    getSectionOrder: () => 10,
+    section: (definition) => {
+      captured.promptSections.push(definition)
       return () => {}
     },
   },
@@ -851,6 +860,81 @@ const mdHand = await tool.execute({ path: '.dsh/showme/md-hand.html' }, exec).th
 check('手写页（没有数据文件）：不误报', () =>
   assert.equal(mdHand, null, String(mdHand && mdHand.message)),
 )
+
+console.log('\\n[偏好] 用户级 prefs（<DSH_HOME>/showme/prefs.json）')
+
+// 注意：prefs 落在 DSH_HOME，测试期间必须指到临时目录，
+// 绝不能碰用户真实的 ~/.dsh/showme/prefs.json。
+const prefsHome = await mkdtemp(join(tmpdir(), 'dsh-prefs-'))
+const previousHome = process.env.DSH_HOME
+process.env.DSH_HOME = prefsHome
+
+const getPrefs = () => rawRequest(`${base}/prefs`)
+const postPrefs = (body) =>
+  rawRequest(`${base}/prefs`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+
+const prefsDefault = await getPrefs()
+check('没有偏好文件：回默认值', () => {
+  const prefs = JSON.parse(prefsDefault.body).prefs
+  assert.equal(prefs.autoOpenSidebar, true)
+  assert.equal(prefs.planPage, 'offer')
+  assert.equal(prefs.planPageOpenOnReview, true)
+})
+
+await postPrefs({ planPage: 'require', autoOpenSidebar: false })
+const prefsAfter = JSON.parse((await getPrefs()).body).prefs
+check('写入后再读：改过的值生效', () => {
+  assert.equal(prefsAfter.planPage, 'require')
+  assert.equal(prefsAfter.autoOpenSidebar, false)
+})
+const savedPrefs = JSON.parse(await readFile(join(prefsHome, 'showme', 'prefs.json'), 'utf8'))
+check('偏好落在 $DSH_HOME/showme/prefs.json', () => assert.equal(savedPrefs.planPage, 'require'))
+
+const prefsJunk = JSON.parse((await postPrefs({ planPage: 'nonsense', hack: 1 })).body).prefs
+check('非法档位与未知键被忽略', () => {
+  assert.equal(prefsJunk.planPage, 'require')
+  assert.equal('hack' in prefsJunk, false)
+})
+
+const prefsPut = await rawRequest(`${base}/prefs`, { method: 'PUT' })
+check('prefs 的 PUT：405', () => assert.equal(prefsPut.status, 405))
+
+if (previousHome === undefined) delete process.env.DSH_HOME
+else process.env.DSH_HOME = previousHome
+
+console.log('\\n[图片] 缺图就当场失败')
+
+await writeFile(join(workspace, '.dsh', 'showme', 'img-bad.html'), pageBody, 'utf8')
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'img-bad.data.js'),
+  "window.SHOWME = { title: 'x', sections: [{ heading: 'h', items: [{ id: 'a', title: 'A', image: 'stills/nope.png' }] }] }\n",
+  'utf8',
+)
+const imgBad = await tool.execute({ path: '.dsh/showme/img-bad.html' }, exec).then(
+  () => null,
+  (error) => error,
+)
+check('image 指向不存在的文件：调用失败', () => {
+  assert.ok(imgBad !== null, '缺图没被拦下来')
+  assert.match(imgBad.message, /不存在的图片/)
+  assert.match(imgBad.message, /stills\/nope\.png/)
+})
+
+await writeFile(join(workspace, '.dsh', 'showme', 'img-ok.html'), pageBody, 'utf8')
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'img-ok.data.js'),
+  "window.SHOWME = { title: 'x', sections: [{ heading: 'h', items: [{ id: 'a', title: 'A', image: '../../stills/a.png' }] }] }\n",
+  'utf8',
+)
+const imgOk = await tool.execute({ path: '.dsh/showme/img-ok.html' }, exec).then(
+  () => null,
+  (error) => error,
+)
+check('图存在：放行', () => assert.equal(imgOk, null, String(imgOk && imgOk.message)))
 
 server.close()
 

@@ -288,6 +288,16 @@ check('回执区有进度提示，选完就往上走（目标梯度）', () => {
   assert.match(reviewResult.receipt.innerHTML, /id="sm-progress"/, '回执区没有进度元素')
   assert.equal(reviewResult.document.getElementById('sm-progress').textContent, '已表态 1 / 2')
 })
+
+console.log('\n[渲染回执] 页面告诉卡片"我出来了/我挂了"')
+
+check('渲染成功：发一条 ok:true 的 dsh-showme-rendered', () => {
+  const messages = reviewResult.messages.filter((message) => message.type === 'dsh-showme-rendered')
+  assert.ok(messages.length >= 1, '一条渲染回执都没发')
+  const last = messages[messages.length - 1]
+  assert.equal(last.ok, true)
+  assert.ok(last.ids >= 2, `可点名项数不对：${last.ids}`)
+})
 check('条目上打了已表态的标记', () =>
   assert.match(reviewResult.content.innerHTML, /data-item="hero-v3" data-done="0"/),
 )
@@ -370,6 +380,13 @@ check('给出"没找到数据文件"与文件名', () => {
 })
 check('说明里给出了怎么办', () => {
   assert.match(missing.content.innerHTML, /同名同目录/)
+})
+check('渲染失败：回执是 ok:false（卡片能据此报"渲染失败"）', () => {
+  const messages = missing.messages.filter((message) => message.type === 'dsh-showme-rendered')
+  assert.ok(messages.length >= 1, '失败时没有回执')
+  const last = messages[messages.length - 1]
+  assert.equal(last.ok, false)
+  assert.equal(last.failed, true)
 })
 
 // ── 两条"宿主给不出文件名"与"静态引入"的现场回归（2026-09-26）──
@@ -501,6 +518,19 @@ check('不在卡片里（浏览器直开）：不发 ready、也不发草稿', (
   assert.ok(!standalone.messages.some((message) => message.type === 'dsh-showme-draft-ready'))
   assert.ok(!standalone.messages.some((message) => message.type === 'dsh-showme-draft'))
 })
+
+console.log('\n[doc] 纯文档形状：没有判定控件')
+
+const docResult = await run('doc', {
+  title: '一篇说明',
+  sections: [{ heading: '一', intro: '引言**加重**', blocks: [{ type: 'text', text: '正文' }] }],
+})
+check('doc 页没有任何判定按钮', () => assert.ok(!docResult.content.innerHTML.includes('sm-btn')))
+check('doc 页没有回执 textarea，只有「复制全文」', () => {
+  assert.ok(!docResult.receipt.innerHTML.includes('id="sm-out"'), 'doc 页还在渲染回执输入框')
+  assert.match(docResult.receipt.innerHTML, /sm-copy-doc/)
+})
+check('doc 页的行内 markdown 照常渲染', () => assert.match(docResult.content.innerHTML, /<strong>加重<\/strong>/))
 
 console.log('\n[markdown] 行内渲染，结构交给块类型')
 

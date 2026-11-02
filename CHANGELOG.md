@@ -1,5 +1,38 @@
 # 变更记录
 
+## 0.3.0 — 2026-11-02
+
+**渲染可观测、缺图硬失败、纯文档形状，以及"设置页"这块地基。**
+
+### 渲染回执（render-report）
+- 页面 `render()` 成功后 `postMessage` 一条 `dsh-showme-rendered { ok, ids, buttons }`；失败路径（`fail()`）发 `ok:false, failed:true`。
+- 卡片头部据此挂徽标：正常显示「N 项 · M 按钮」，失败显示红色「渲染失败」。
+  过去卡片看不到 iframe 内部（不透明源），白屏只能等用户说 —— 现在它自己会报。
+- 说明：本轮只上**卡片徽标**；`rendered.jsonl` 落盘留到下一轮（没有读者的日志先不做）。
+
+### 缺图硬失败（image-hard-fail）
+- `show_html` 预检新增 `findMissingImages()`：模板数据里 `image:` / `src:` 指向的**本地**文件不存在 → 与 mermaid 同格式抛错，点名文件。
+- 外链与绝对路径放过（那不是模板能保证的）。裂图这个"半失败"状态没有了。
+
+### 纯文档形状（doc-shape）
+- `templates/doc.html` + `core.js` 的 `renderDoc()`：**没有判定控件、没有回执**，只有 masthead + sections + 一个「复制全文」。
+- 长说明、机制讲解、结论汇总用它，别再往 `review` 里硬塞空控件。
+
+### 设置页 + 用户级偏好
+- 客户端注册 `settings.section` 一页「展示页」（设置 → 展示页）；**用户级**偏好存 `<DSH_HOME>/showme/prefs.json`（不是工作区级）。
+- 新路由 `GET|POST /api/showme/prefs`：字段白名单、非法值不顶掉已有设置、原子写、30s 缓存。
+- 三项：`autoOpenSidebar` / `planPage` / `planPageOpenOnReview`。
+
+### 自动开右侧栏 + 计划页（首版）
+- `show_html` 之后按偏好自动在右栏打开：每轮只开最后一张（1.2s 防抖）、每页只开一次、手动关闭后不再抢、窗口 <1200px 不开。
+- 计划页：插件注册 `showme:plan-page` 系统提示段（`planPage` 三档，`off` 时为空），并在 `conversation.plan-review.actions` 里注册「打开展示页」——
+  解析 markdown 里的 `展示页：<路径>`，**打开前 HEAD 验存在**，不存在就给一句人话，不开空白 tab。
+- 明确不做：fork `exit_plan_mode` / 评审面板 —— 计划仍是 markdown（可 diff、可审计），页面是展开。
+
+### 验证
+- `npm test` **411 项全绿**：清单 7 / 宿主 **140（+7）** / mermaid 35 / 客户端 **87（+8）** / 预设 38 / 模板 **67（+5）** / 页面 37。
+- 新增 20 条护栏：渲染回执（成功 / 失败）、doc 页无控件与无回执、prefs 的读写/落盘/非法值/405、缺图硬失败与放行、偏好 GET/POST 地址、页面 HEAD 校验、计划页标记解析、按钮有无。
+
 ## 0.2.8 — 2026-11-02
 
 **文本字段里的 markdown 不再露原文；但结构仍然只有"块类型"一种写法。**

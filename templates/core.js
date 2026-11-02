@@ -32,6 +32,9 @@
   /** 卡片认这个 type 才收。与 skill §4.1 的契约一致。 */
   var FEEDBACK_TYPE = 'dsh-showme-feedback'
 
+  /** 渲染回执的 type（卡片据此发现白屏，0.3.0）。 */
+  var RENDERED_TYPE = 'dsh-showme-rendered'
+
   /** 当前形状，由外壳用 `window.SHOWME_SHAPE` 声明。 */
   var SHAPE = window.SHOWME_SHAPE || 'review'
 
@@ -151,6 +154,7 @@
     }
     var receipt = document.getElementById('sm-receipt')
     if (receipt !== null) receipt.innerHTML = ''
+    reportRendered({ ok: false, failed: true, message: String(title) })
   }
 
   // ══════════════ 通用内容块 ══════════════
@@ -282,6 +286,53 @@
       return '<div class="sm-split">' + cardsHtml + linesHtml + '</div>'
     }
     return cardsHtml + linesHtml
+  }
+
+  /** doc：纯文档。没有判定控件、没有回执——它只负责把内容讲清楚。 */
+  function renderDoc(data) {
+    var html = ''
+    list(data.sections).forEach(function (sec) {
+      var body = sec.intro ? '<p>' + inlineMd(sec.intro) + '</p>' : ''
+      body += list(sec.blocks).map(block).join('')
+      html += section(sec.heading, sec.sub, body)
+    })
+    return html
+  }
+
+  /** doc 的页尾：一个复制按钮，别的一概没有。 */
+  function docFooterHtml() {
+    return '<section class="section sm-receipt"><p style="margin-top:0">' +
+      '<button class="btn" id="sm-copy-doc" type="button">复制全文</button>' +
+      '<span class="sm-msg" id="sm-msg"></span>' +
+      '</p></section>'
+  }
+
+  /**
+   * 告诉卡片"我渲染完了/我挂了"。
+   *
+   * 为什么需要：卡片看不到 iframe 里的 DOM（不透明源），白屏时只能等用户说。
+   * 这一条消息让"页面出来了没有"变成可观测的（0.3.0）。
+   *
+   * @param payload - `{ ok, failed?, message?, ids? }`。
+   */
+  function reportRendered(payload) {
+    if (window.parent === window) return
+    var buttons = 0
+    try {
+      buttons = document.querySelectorAll('.sm-btn').length
+    } catch (error) {
+      buttons = 0
+    }
+    try {
+      window.parent.postMessage({
+        type: RENDERED_TYPE,
+        ok: payload.ok === true,
+        failed: payload.failed === true,
+        ids: payload.ids === undefined ? ids.length : payload.ids,
+        buttons: buttons,
+        message: payload.message || '',
+      }, '*')
+    } catch (error) { /* 父页面不在就算了 */ }
   }
 
   // ══════════════ 三个形状 ══════════════
@@ -451,6 +502,7 @@
   /** 状态变了：等 400ms 再发（打字时别每一键都发）。 */
   function saveDraftSoon() {
     if (!inCard || !draftReady) return
+    if (SHAPE === 'doc') return
     if (typeof setTimeout !== 'function') return
     if (draftTimer !== null) clearTimeout(draftTimer)
     draftTimer = setTimeout(postDraft, 400)
@@ -589,6 +641,23 @@
   /** 接上事件。 */
   function wire() {
     var main = document.getElementById('sm-content')
+    if (SHAPE === 'doc') {
+      var copy = document.getElementById('sm-copy-doc')
+      if (copy !== null) {
+        copy.addEventListener('click', function () {
+          var text = main === null ? '' : String(main.innerText || main.textContent || '')
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(
+              function () { say('已复制全文 ✓') },
+              function () { say('剪贴板被拦，请手动选中') },
+            )
+          } else {
+            say('请手动选中复制')
+          }
+        })
+      }
+      return
+    }
     main.addEventListener('click', function (event) {
       var target = event.target
       if (!target || !target.getAttribute || !target.className) return
@@ -720,9 +789,10 @@
     ids = []
     state = {}
 
-    var body = SHAPE === 'pick' ? renderPick(data)
-      : SHAPE === 'report' ? renderReport(data)
-        : renderReview(data)
+    var body = SHAPE === 'doc' ? renderDoc(data)
+      : SHAPE === 'pick' ? renderPick(data)
+        : SHAPE === 'report' ? renderReport(data)
+          : renderReview(data)
 
     document.getElementById('sm-masthead').innerHTML =
       '<header class="masthead">' +
@@ -738,12 +808,16 @@
 
     document.getElementById('sm-content').innerHTML =
       '<div id="sm-banner">' + bannerHtml() + '</div>' + body
-    document.getElementById('sm-receipt').innerHTML = receiptHtml()
 
-    // 词表必须列出来：用户要知道能填什么，模型要知道收到了什么（skill §3.1）
-    document.getElementById('sm-words').innerHTML =
-      verdicts.map(function (word) { return '<span class="chip accent">' + esc(word) + '</span>' }).join('') +
-      '<span class="chip">备注可空</span>'
+    if (SHAPE === 'doc') {
+      document.getElementById('sm-receipt').innerHTML = docFooterHtml()
+    } else {
+      document.getElementById('sm-receipt').innerHTML = receiptHtml()
+      // 词表必须列出来：用户要知道能填什么，模型要知道收到了什么（skill §3.1）
+      document.getElementById('sm-words').innerHTML =
+        verdicts.map(function (word) { return '<span class="chip accent">' + esc(word) + '</span>' }).join('') +
+        '<span class="chip">备注可空</span>'
+    }
 
     wire()
     sync()
@@ -751,6 +825,9 @@
     // 草稿可能在渲染前就到了（页面小、卡片快），那时 id 还没有，得等这里再套。
     rendered = true
     if (pendingDraft !== undefined) applyDraft(pendingDraft)
+
+    // 上报"我渲染好了"：卡片据此判断白屏，宿主据此留一份记录（0.3.0）。
+    reportRendered({ ok: true, ids: ids.length })
   }
 
   /** 启动：拿到数据（静态引入或按同名推导）并渲染。 */
