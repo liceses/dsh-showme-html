@@ -251,10 +251,10 @@ check('注册了插件样式', () => {
   assert.ok(styles.length >= 1)
   assert.equal(styles[0].dataset.plugin, 'dsh-showme-html')
 })
-check('注册的槽位都对（含设置页与计划评审 action）', () =>
+check('注册的槽位都对（设置进了插件页，不再占原生设置弹窗）', () =>
   assert.deepEqual(injections, [
     'tool.call.toolview',
-    'settings.section',
+    'plugins.detail.section',
     'conversation.plan-review.actions',
     'shell.overlay',
     'conversation.input.left',
@@ -1061,6 +1061,30 @@ check('偏好：写走 POST，提交的是改动的那几项', async () => {
   const call = fetchCalls.filter((entry) => entry.url === '/api/showme/prefs' && entry.options?.method === 'POST').pop()
   assert.ok(call !== undefined, '没有发写请求')
   assert.deepEqual(JSON.parse(call.options.body), { planPage: 'require' })
+})
+
+check('设置进了插件页：只认自己那条组合包，别人的页返回 null', () => {
+  const Section = internals.ShowmeSettingsSection
+  assert.equal(typeof Section, 'function', '没有导出 ShowmeSettingsSection')
+  assert.equal(Section({ subject: { kind: 'row', pkg: { name: 'dsh-showme-html' } } }), null, '行页不该出区块')
+  assert.equal(Section({ subject: { kind: 'item', id: 'x' } }), null, '官方插件页不该出区块')
+  assert.equal(Section({ subject: { kind: 'bundle', pkg: { name: 'other-plugin' } } }), null, '别人的组合包不该出区块')
+  assert.equal(Section({}), null, '没有 subject 时要安静')
+})
+check('自己的组合包页：区块外壳 + 标题「展示页 · 设置」+ 复用控件组', () => {
+  const tree = internals.ShowmeSettingsSection({ subject: { kind: 'bundle', pkg: { name: 'dsh-showme-html' } } })
+  assert.ok(tree !== null && tree.type === 'section', '区块根节点应当是 section')
+  assert.equal(tree.props.className, 'dsh-showme-pluginSection')
+  const kids = tree.children.filter(Boolean)
+  const body = kids[kids.length - 1]
+  assert.equal(body.type, internals.ShowmeSettings, '正文应当复用 ShowmeSettings（控件组）')
+  const text = JSON.stringify(tree)
+  assert.ok(text.includes('展示页 · 设置'), '区块标题丢了')
+  assert.ok(text.includes('prefs.json'), '落点说明丢了')
+})
+check('原生设置弹窗那一栏已经不再注册', () => {
+  assert.equal(injections.includes('settings.section'), false, 'settings.section 又回来了')
+  assert.ok(code.includes("name: 'plugins.detail.section'"), '插件页槽位没注册')
 })
 
 check('打开前 HEAD 一下：存在才开', async () => {

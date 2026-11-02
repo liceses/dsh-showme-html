@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.3.2-blue.svg)
+![Version](https://img.shields.io/badge/version-0.3.3-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -116,7 +116,7 @@ npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / �
 | 它到底怎么实现的 | [工作原理](#how) |
 | 页面里的脚本能干什么 | [安全模型](#security) |
 | 卡片为什么不会被折叠 | [卡片在哪一行](#chat-row) |
-| 自动开右栏 / 计划页怎么设 | [设置](#settings) · [计划页](#plan-page) |
+| 自动开右栏 / 计划页怎么设 | [设置（在插件页里）](#settings) · [计划页](#plan-page) |
 | 刷新会不会丢我填的东西 | [刷新 / 切会话不丢](#draft) |
 | 有什么坑 | [已知限制](#limits) |
 | 想改代码 | [仓库结构](#layout) · [开发](#dev) |
@@ -463,7 +463,8 @@ templates/core.js        内核：渲染与交互全在这里，四份骨架共�
 <a id="settings"></a>
 ## 设置：展示页
 
-**设置 → 展示页**（插件注册在 `settings.section` 槽里）。三个开关，存**用户级**偏好
+**插件页 → `dsh-showme-html` → 「展示页 · 设置」**（插件注册在 `plugins.detail.section` 槽里，
+只在自己那条组合包的详情页出现，别人的插件页不会有这块）。三个开关，存**用户级**偏好
 `<DSH_HOME>/showme/prefs.json` —— 换工作区不用重设，因为这是这个人的展示习惯。
 
 | 设置 | 默认 | 作用 |
@@ -472,7 +473,10 @@ templates/core.js        内核：渲染与交互全在这里，四份骨架共�
 | 计划页 | `offer` | `off` 只写 markdown / `offer` 复杂计划额外产一页 / `require` 一律产页（markdown 只留摘要） |
 | 计划评审出现时自动打开计划页 | 开 | 只对 markdown 里写了「展示页：<路径>」的那次评审生效 |
 
-设置页读写走 `GET|POST /api/showme/prefs`（字段白名单 + 原子写 + 30s 缓存）。
+控件读写走 `GET|POST /api/showme/prefs`（字段白名单 + 原子写 + 30s 缓存）。
+
+> 0.3.3 起不再占用 DSH 的 `设置` 弹窗：设置属于这个插件，就放在插件自己的页面上（宿主给
+> `plugins.detail.section` 这个列表槽，条目按 `subject` 过滤、自绘区块）。
 
 ---
 
@@ -646,8 +650,8 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 417 项离线断言：清单 7 / 宿主 146 / mermaid 35 / 客户端 87 / 预设 38 / 模板 67 / 页面 37
-                        # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 416）
+npm test                # 420 项离线断言：清单 7 / 宿主 146 / mermaid 35 / 客户端 90 / 预设 38 / 模板 67 / 页面 37
+                        # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 419）
 
 npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区** / 落地副本
 

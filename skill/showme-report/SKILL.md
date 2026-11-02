@@ -200,7 +200,7 @@ if (window.parent !== window) {
 
 - markdown 仍是**权威存档**（`exit_plan_mode` 的参数不变），页面是它的展开；
 - 那一行是给人和插件用的锚点，插件据此在右栏打开页面（**不是** markdown 链接）；
-- 用户可能在 设置 → 展示页 里把 `planPage` 设成 `off` / `offer` / `require`：`off` 时只写 markdown。
+- 用户可能在 **插件页 → dsh-showme-html → 展示页 · 设置** 里把 `planPage` 设成 `off` / `offer` / `require`：`off` 时只写 markdown。
 
 ---
 

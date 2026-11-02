@@ -1,5 +1,37 @@
 # 变更记录
 
+## 0.3.3 — 2026-11-02
+
+**设置从 DSH 的「设置」弹窗搬进插件自己的页面（插件 → dsh-showme-html → 展示页 · 设置）。**
+
+### 为什么搬
+`设置 → 展示页` 那一栏是 0.3.0 拿 `settings.section` 挂的，位置对，但归属不对：
+它是这个插件的开关，却长在 DSH 全局设置里。宿主对插件页留了扩展点，那里才是它的家。
+
+### 宿主契约（在 asar 的插件开发文档里核实，不是猜的）
+插件页声明了三个详情页列表槽：`plugins.detail.actions`（页头控件）、`plugins.detail.badge`（标题旁标签）、
+`plugins.detail.section`（页面正文之下的区块）。每个条目以**页面的 `subject`** 渲染：
+`{kind:'bundle',pkg}` / `{kind:'row',pkg,row}` / `{kind:'item',id}`；**对无话可说的 subject 返回 null**，
+区块外观自绘，页面按 `order` 排序。
+
+### 改动（只动浏览器半区）
+- 删掉 `ctx.slots.inject('settings.section', …)`（原生设置弹窗里那一栏**整块消失**）。
+- 新增 `ShowmeSettingsSection({subject})`：`subject.kind !== 'bundle'` 或 `subject.pkg.name !== 'dsh-showme-html'` → `null`（别人的插件页不受影响）；否则渲染区块外壳（标题「展示页 · 设置」+ 用户级偏好落点说明）+ 原来的三件控件。
+- `ShowmeSettings` 变成纯「控件组」：标题、说明、关闭按钮都交出去。
+- 注册改为 `{ name:'plugins.detail.section', id:'dsh-showme-html-settings', order:40 }`。
+- 新增 `PACKAGE_NAME` 常量（与 `subject.pkg.name` 逐字比对）与区块外壳样式（只用 `--dsw-alias-*`）。
+- 行为不变：仍是用户级 `<DSH_HOME>/showme/prefs.json`，仍走 `GET|POST /api/showme/prefs`（白名单 / 原子写 / 30s 缓存）。
+
+### 验证
+离线：`npm test` **420 项全绿**（清单 7 / 宿主 146 / mermaid 35 / 客户端 **90（+3）** / 预设 38 / 模板 67 / 页面 37）。
+新增三条：只认自己那条组合包（行页 / 官方插件页 / 别人的包全返回 `null`）；自己的包渲染出 `<section>` + 标题 + 复用控件组；`settings.section` **不再注册**（防回潮）。
+
+真机（隔离实例 3320，带 token；为防额度面板每秒轮询干扰自动化，先屏蔽 `/api/opencode-go/usage`）：
+- 插件 → 已安装插件 → `dsh-showme-html`（显示 `v0.3.3`、运行中）→ 详情页**底部**出现「展示页 · 设置」区块：说明 + 2 个 checkbox + 1 个 select，`.dsh-showme-pluginSection` 计数 1。
+- 把「计划页」从 `offer` 改成 `off`：页面无错误，`GET /api/showme/prefs` 与 `~/.dsh/showme/prefs.json` 都变成 `off`；重进详情页仍显示 `off`（读路径也通）。
+- 点开另一个插件 `dsh-status-rotator`：标题是那个插件，`.dsh-showme-pluginSection` 计数 **0**，页面里搜不到「展示页 · 设置」——subject 过滤在真机上成立。
+- 测完已恢复：偏好文件原本不存在，已删除；实例与 relay 已停，临时日志已清。
+
 ## 0.3.2 — 2026-11-02
 
 **文档一致性巡检 + 计划页真机验收，外加一处「提示无条件注入」的修复。**
