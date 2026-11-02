@@ -635,19 +635,26 @@ const receiptResponse = await rawRequest(`${base}/mermaid`, {
   body: JSON.stringify(receipt),
 })
 check('回执 200', () => assert.equal(receiptResponse.status, 200))
-check('回执里回报了落盘文件', () => assert.match(receiptResponse.body, /diagram\.1\.png/))
 
-const savedPng = await readFile(join(workspace, '.dsh', 'showme', 'mermaid', 'diagram.1.png')).catch(() => null)
+const receiptBody = JSON.parse(receiptResponse.body)
+const savedPngPath = receiptBody.diagrams[0]?.png ?? ''
+check('回执里回报了落盘文件', () =>
+  assert.match(savedPngPath, /^\.dsh\/showme\/mermaid\/[0-9a-f]{8}\/diagram\.1\.png$/),
+)
+
+const savedPng = await readFile(join(workspace, savedPngPath)).catch(() => null)
 check('PNG 落盘且字节对得上', () => assert.ok(savedPng !== null) && assert.deepEqual([...savedPng], [...onePixelPng]))
 
+const savedJsonPath = (receiptBody.files ?? []).find((file) => file.endsWith('.json')) ?? ''
 const savedJson = JSON.parse(
-  await readFile(join(workspace, '.dsh', 'showme', 'mermaid', 'diagram.json'), 'utf8').catch(() => 'null'),
+  await readFile(join(workspace, savedJsonPath), 'utf8').catch(() => 'null'),
 )
 check('回执 JSON 记下了图类型与 ok', () => {
   assert.equal(savedJson.ok, true)
   assert.equal(savedJson.diagrams[0].type, 'flowchart-v2')
-  assert.equal(savedJson.diagrams[0].png, '.dsh/showme/mermaid/diagram.1.png')
+  assert.equal(savedJson.diagrams[0].png, savedPngPath)
 })
+check('JSON 与 PNG 落在同一页目录里', () => assert.equal(dirname(savedJsonPath), dirname(savedPngPath)))
 
 const failedReceipt = await rawRequest(`${base}/mermaid`, {
   method: 'POST',
@@ -660,7 +667,9 @@ const failedReceipt = await rawRequest(`${base}/mermaid`, {
   }),
 })
 check('失败回执也 200（不是错误，是状态）', () => assert.equal(failedReceipt.status, 200))
-const errorsTxt = await readFile(join(workspace, '.dsh', 'showme', 'mermaid', 'diagram.errors.txt'), 'utf8').catch(() => '')
+const failedBody = JSON.parse(failedReceipt.body)
+const errorsPath = (failedBody.files ?? []).find((file) => file.endsWith('.errors.txt')) ?? ''
+const errorsTxt = await readFile(join(workspace, errorsPath), 'utf8').catch(() => '')
 check('失败时写下 errors.txt', () => assert.match(errorsTxt, /boom from browser/))
 
 const unknownReceipt = await rawRequest(`${base}/mermaid`, {
@@ -669,6 +678,66 @@ const unknownReceipt = await rawRequest(`${base}/mermaid`, {
   body: JSON.stringify({ sessionId: 'no-such-session', page: 'x.html', ok: true, diagrams: [] }),
 })
 check('未知会话的回执 404', () => assert.equal(unknownReceipt.status, 404))
+
+// 页面没展示过 / 不存在：不许落产物。0.3.4 之前不查存在性，随手编一个路径也能催出文件。
+const ghostReceipt = await rawRequest(`${base}/mermaid`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({
+    sessionId: 'live-session',
+    page: 'a/ghost.html',
+    ok: true,
+    diagrams: [{ index: 1, type: 'flowchart-v2', error: null, png: `data:image/png;base64,${onePixelPng.toString('base64')}` }],
+  }),
+})
+check('回执指向不存在的页面 → 404', () => assert.equal(ghostReceipt.status, 404))
+const mermaidTree = await readdir(join(workspace, '.dsh', 'showme', 'mermaid'), { recursive: true }).catch(() => [])
+check('不存在的页面不会催出 PNG', () =>
+  assert.equal(mermaidTree.some((file) => String(file).endsWith('ghost.1.png')), false),
+)
+
+// 同名页面在不同目录：产物必须各有各的目录，不能互相覆盖（0.3.4 的修复点）。
+await mkdir(join(workspace, 'a'), { recursive: true })
+await mkdir(join(workspace, 'b'), { recursive: true })
+await writeFile(join(workspace, 'a', 'review.html'), '<html></html>', 'utf8')
+await writeFile(join(workspace, 'b', 'review.html'), '<html></html>', 'utf8')
+/**
+ * 给某个页面发一条一像素的渲染回执。
+ * @param page - 页面在工作区里的相对路径。
+ * @returns `{ status, body }`（body 已解析）。
+ */
+async function sendReceipt(page) {
+  const response = await rawRequest(`${base}/mermaid`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: 'live-session',
+      page,
+      ok: true,
+      diagrams: [{ index: 1, type: 'flowchart-v2', error: null, png: `data:image/png;base64,${onePixelPng.toString('base64')}` }],
+    }),
+  })
+  return { status: response.status, body: JSON.parse(response.body) }
+}
+const clashA = await sendReceipt('a/review.html')
+const clashB = await sendReceipt('b/review.html')
+const clashJsonA = (clashA.body.files ?? []).find((file) => file.endsWith('.json')) ?? ''
+const clashJsonB = (clashB.body.files ?? []).find((file) => file.endsWith('.json')) ?? ''
+check('同名页面：各落各的目录', () => {
+  assert.equal(clashA.status, 200)
+  assert.equal(clashB.status, 200)
+  assert.notEqual(dirname(clashJsonA), dirname(clashJsonB))
+})
+const recordA = JSON.parse(await readFile(join(workspace, clashJsonA), 'utf8').catch(() => 'null'))
+const recordB = JSON.parse(await readFile(join(workspace, clashJsonB), 'utf8').catch(() => 'null'))
+check('同名页面：两份记录都指回自己那一页', () => {
+  assert.equal(recordA.page, 'a/review.html')
+  assert.equal(recordB.page, 'b/review.html')
+})
+// 归一：浏览器会把 `./` 吃掉；工具侧与回执必须算出同一个目录，否则预告的路径对不上。
+const normalizedReceipt = await sendReceipt('./a/review.html')
+const normalizedJson = (normalizedReceipt.body.files ?? []).find((file) => file.endsWith('.json')) ?? ''
+check('回执里的 ./ 归一后落到同一页目录', () => assert.equal(dirname(normalizedJson), dirname(clashJsonA)))
 
 const notPost = await rawRequest(`${base}/mermaid`)
 check('回执路由 GET → 405', () => assert.equal(notPost.status, 405))
@@ -690,8 +759,12 @@ check('好图：工具返回里带 mermaid 结果', () => {
   assert.deepEqual(goodResult.mermaid.types, ['flowchart-v2'])
 })
 check('好图：提前给出可预测的 PNG 路径', () => {
-  assert.deepEqual(goodResult.mermaid.png, ['.dsh/showme/mermaid/diagram.1.png'])
+  assert.equal(goodResult.mermaid.png.length, 1)
+  assert.match(goodResult.mermaid.png[0], /^\.dsh\/showme\/mermaid\/[0-9a-f]{8}\/diagram\.1\.png$/)
 })
+check('好图：预告的路径就是回执真正落盘的那一个', () =>
+  assert.equal(goodResult.mermaid.png[0], savedPngPath),
+)
 check('好图：hint 里告诉模型去哪看图', () => assert.match(goodResult.hint, /read_image/))
 
 await assert.rejects(

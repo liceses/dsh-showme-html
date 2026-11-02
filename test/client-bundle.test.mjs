@@ -105,6 +105,8 @@ function plain(value) {
 const loaded = { id: null, exports: null }
 /** 记录挂到 window / document 上的键盘监听（用来验证 Esc 通道）。 */
 const keyListeners = { window: [], document: [] }
+/** 记录挂到 window / document 上的 message 监听（顶层回执转发点在这里）。 */
+const messageListeners = []
 /** 记录 window.focus() 有没有被调用。 */
 const focusCalls = { count: 0 }
 
@@ -113,8 +115,14 @@ function recordingTarget(bucket) {
   return {
     addEventListener: (type, fn, capture) => {
       if (type === 'keydown') bucket.push({ fn, capture })
+      if (type === 'message') messageListeners.push(fn)
     },
     removeEventListener: (type, fn, capture) => {
+      if (type === 'message') {
+        const at = messageListeners.indexOf(fn)
+        if (at >= 0) messageListeners.splice(at, 1)
+        return
+      }
       if (type !== 'keydown') return
       const at = bucket.findIndex((entry) => entry.fn === fn && entry.capture === capture)
       if (at >= 0) bucket.splice(at, 1)
@@ -154,9 +162,15 @@ const fakeWindow = {
 
 /** 记录注入的样式。 */
 const styles = []
+/**
+ * 文档里"当前渲染着的 iframe"。回执来源核对要靠父文档读自己的 `src` 属性，
+ * 所以桩里要有 `querySelectorAll('iframe')`；用例自己往里塞 frame。
+ */
+const documentFrames = []
 const fakeDocument = {
   createElement: () => ({ dataset: {}, textContent: '', remove: () => {} }),
   head: { appendChild: (element) => styles.push(element) },
+  querySelectorAll: (selector) => (selector === 'iframe' ? documentFrames : []),
   addEventListener: documentTarget.addEventListener,
   removeEventListener: documentTarget.removeEventListener,
 }
@@ -1048,6 +1062,103 @@ check('页面交回的反馈由卡片补发到 /feedback（页面自己 POST 会
   const call = fetchCalls.filter((entry) => entry.url === '/api/showme/feedback').pop()
   assert.ok(call !== undefined, '没有补发反馈')
   assert.equal(JSON.parse(call.options.body).text, 'a 同意')
+})
+
+console.log('\n[回执来源核对]')
+
+/** 一个"我们自己的"展示页 iframe 桩。 */
+const pageFrame = {
+  contentWindow: { id: 'frame-a' },
+  getAttribute: (name) => (name === 'src' ? '/api/showme/raw/s1/a/review.html?v=7' : null),
+}
+const otherPageFrame = {
+  contentWindow: { id: 'frame-b' },
+  getAttribute: (name) => (name === 'src' ? '/api/showme/raw/s1/b/review.html?v=7' : null),
+}
+const strangerFrame = {
+  contentWindow: { id: 'frame-c' },
+  getAttribute: (name) => (name === 'src' ? 'https://example.com/embed.html' : null),
+}
+documentFrames.push(pageFrame, otherPageFrame, strangerFrame)
+
+check('能从 iframe 的 src 认出这一页（忽略 ?v= 防抖参数）', () => {
+  assert.deepEqual(plain(internals.frameIdentity(pageFrame.contentWindow)), {
+    sessionId: 's1',
+    page: 'a/review.html',
+  })
+  assert.deepEqual(plain(internals.frameIdentity(otherPageFrame.contentWindow)), {
+    sessionId: 's1',
+    page: 'b/review.html',
+  })
+})
+
+check('不是本插件的 frame → null（没有 contentWindow 也不炸）', () => {
+  assert.equal(internals.frameIdentity(strangerFrame.contentWindow), null)
+  assert.equal(internals.frameIdentity(null), null)
+  assert.equal(internals.frameIdentity({ id: 'not-a-frame' }), null)
+})
+
+check('回执自洽才放行：来源页与正文里的 sessionId / page 都要对上', () => {
+  const ok = internals.acceptMermaidReceipt({
+    data: { type: internals.MERMAID_TYPE, sessionId: 's1', page: 'a/review.html', diagrams: [] },
+    source: pageFrame.contentWindow,
+  })
+  assert.equal(ok?.page, 'a/review.html')
+
+  assert.equal(
+    internals.acceptMermaidReceipt({
+      data: { type: internals.MERMAID_TYPE, sessionId: 's1', page: 'b/review.html', diagrams: [] },
+      source: pageFrame.contentWindow,
+    }),
+    null,
+    '页面冒充另一页时必须拒绝',
+  )
+  assert.equal(
+    internals.acceptMermaidReceipt({
+      data: { type: internals.MERMAID_TYPE, sessionId: 's1', page: 'a/review.html', diagrams: [] },
+      source: strangerFrame.contentWindow,
+    }),
+    null,
+    '别的插件的 iframe 不该能写文件',
+  )
+  assert.equal(
+    internals.acceptMermaidReceipt({
+      data: { type: 'something-else', sessionId: 's1', page: 'a/review.html' },
+      source: pageFrame.contentWindow,
+    }),
+    null,
+  )
+})
+
+check('顶层监听：只转发被承认的那一条', async () => {
+  const count = () => fetchCalls.filter((entry) => entry.url === '/api/showme/mermaid').length
+  assert.ok(messageListeners.length >= 1, '顶层没有挂 message 监听')
+  const dispatch = (event) => {
+    for (const listener of messageListeners) listener(event)
+  }
+
+  // 本文件 apply 过两次（第二次是"缺服务"的宿主编排），所以顶层监听可能不止一条；
+  // 这里断言的是"转发会发生 / 不该发生的不会再发生"，而不是条数。
+  const before = count()
+  dispatch({
+    data: { type: internals.MERMAID_TYPE, sessionId: 's1', page: 'a/review.html', ok: true, diagrams: [] },
+    source: pageFrame.contentWindow,
+  })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  const afterPositive = count()
+  assert.ok(afterPositive > before, '被承认的回执应该发出去')
+
+  // 来源不属于本插件 / 正文冒充别的页面：两条都不该再发请求。
+  dispatch({
+    data: { type: internals.MERMAID_TYPE, sessionId: 's1', page: 'a/review.html', ok: true, diagrams: [] },
+    source: strangerFrame.contentWindow,
+  })
+  dispatch({
+    data: { type: internals.MERMAID_TYPE, sessionId: 's1', page: 'b/review.html', ok: true, diagrams: [] },
+    source: pageFrame.contentWindow,
+  })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  assert.equal(count(), afterPositive)
 })
 
 console.log('\n[设置页 / 计划页]')

@@ -60,7 +60,7 @@ whenToUse: 你准备用 HTML 页面代替长篇 Markdown 向用户汇报；或�
 ### 1.2 要画图就写 mermaid
 
 `<pre class="mermaid">graph TD; A-->B</pre>` 会渲染成 SVG；**写错会让这次 `show_html` 直接失败**，
-渲染完每张图的 PNG 落在 `.dsh/showme/mermaid/<页面名>.<序号>.png`，可直接 `read_image`。
+渲染完每张图的 PNG 落在 `.dsh/showme/mermaid/<页面短哈希>/<页面名>.<序号>.png`，可直接 `read_image`。
 四种写法、样式禁忌、失败形态 → `references/mermaid.md`。
 
 ## 2. 样式：四套预设（可选菜单 + 一个默认）
@@ -169,7 +169,9 @@ if (window.parent !== window) {
 ### 4.3 可选通道 · 直接落盘
 
 页面 `POST /api/showme/feedback`（`{ sessionId, text, page }`）→ 追加到 `.dsh/showme/inbox.jsonl`。
-不实现也完全没问题。sessionId 可从地址取：`location.pathname.split('/')[3]`。
+不实现也完全没问题。sessionId 从地址里取：`location.pathname` 按 `/` 切开后，
+**`raw` 后面那一段**。别写死下标 —— 路由是 `/api/showme/raw/<sessionId>/<page>`，
+写死 `[3]` 拿到的是字面量 `raw`（这个错 0.3.4 修过）。
 
 ## 5. 沙箱硬约束（**已经实测撞过的墙**）
 

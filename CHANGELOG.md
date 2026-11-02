@@ -1,5 +1,29 @@
 # 变更记录
 
+## 0.3.4 — 2026-11-02
+
+**一次通读评审后的八条修复：四条代码/测试、四条文档，外加补 tag。**
+
+### 缺陷与加固
+- **mermaid 产物改为按页分目录**：`.dsh/showme/mermaid/<页面短哈希>/<页面名>.<序号>.png`（同目录还有 `<页面名>.json`、失败时 `<页面名>.errors.txt`）。0.3.3 及以前只用 basename，`a/review.html` 与 `b/review.html` 会抢同一份 `review.1.png` / `review.json`。工具预告路径与回执落盘路径必须算出同一个结果，所以两边共用新的 `normalizePagePath()`（先把反斜杠、`./`、`..` 归一）。
+- **回执要求页面真实存在**：`POST /api/showme/mermaid` 对不存在的 page 回 404。以前只挡越界，随手编一个路径也能在 `.dsh/showme/mermaid/` 下催出文件。
+- **回执转发核对来源**：浏览器半区的顶层转发点只接受来自本插件 iframe（地址是 `/api/showme/raw/<sessionId>/<page>`）且正文里的 `sessionId` / `page` 与地址一致的回执（`acceptMermaidReceipt`）。以前文档里任何 frame 的 `postMessage` 都会被转发去写文件。
+- **doctor 补查 `doc.html`**：`test/doctor.mjs` 的模板资产清单从"内核 + 三个外壳"改成四份外壳（0.3.0 就发了 `doc`，体检一直没看它）。
+
+### 文档
+- `skill/showme-report/SKILL.md` §4.3 的 sessionId 取法改成"`location.pathname` 按 `/` 切开后、`raw` 后面那一段"，不再写死 `split('/')[3]` —— 那个下标拿到的是字面量 `raw`（路由是 `/api/showme/raw/<sessionId>/<page>`）。
+- `docs/0.1.7-native-preview-compat-plan.md` 更正 P0 门禁描述：门禁禁的是 `documentPreviews.register` 与 `dsh-resource://`，**`sidebarRightTabs.register` 不在门禁里**（P1 的侧栏打开正要用它）；"不抢后缀"由"页类型不许有 `patterns` / `canOpen`"那条行为门禁守。
+- `skill/showme-report/references/layout.md` 的"十个类"改成"同一套类名"，并写明 `test/presets.test.mjs` 逐个盯着 22 个语义选择器。
+- `docs/方案与验收-v4.md` 的"现在 417"改为 420；"75 / 88" 两处标明是**当时**的数字。
+
+### 仓库卫生
+- 补打 `v0.2.6` – `v0.3.3` 七个 tag（每个 commit 的 `package.json` 版本都逐个核对过）；本次发 `v0.3.4`。
+
+### 验证
+- `npm test` **431 项全绿**（清单 7 / 宿主 **153（+7）** / mermaid 35 / 客户端 **94（+4）** / 预设 38 / 模板 67 / 页面 37）。
+- 新增断言：同名页面各落各的目录、两份 JSON 的 `page` 不串、`./` 归一后落同一目录、不存在页面 404 且不催出文件、工具预告路径 == 回执真正落盘的路径；回执来源核对四条 + 顶层监听只转发被承认的那一条。
+- `npm run doctor` 六段全绿（工作区落地副本已用 `npm run assets:refresh` 同步）。
+
 ## 0.3.3 — 2026-11-02
 
 **设置从 DSH 的「设置」弹窗搬进插件自己的页面（插件 → dsh-showme-html → 展示页 · 设置）。**

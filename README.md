@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.3.3-blue.svg)
+![Version](https://img.shields.io/badge/version-0.3.4-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -267,8 +267,9 @@ graph TD;
    *这是刻意的*：页面是"交付"，带着坏图的交付不算交付。所以也**没有**单独的检查工具可调——
    检查是展示的一部分。
 2. **agent 能看见自己画的图。** 每张图渲染完导出 PNG，落在
-   `<工作区>/.dsh/showme/mermaid/<页面名>.<序号>.png`（从 1 开始），
+   `<工作区>/.dsh/showme/mermaid/<页面短哈希>/<页面名>.<序号>.png`（从 1 开始），
    路径随 `show_html` 的结果返回；同一目录还有 `<页面名>.json`（每张图的类型与尺寸）。
+   按页分目录是为了同名页面不互相覆盖（`a/review.html` 与 `b/review.html` 各有各的目录）。
    渲染失败则额外写 `<页面名>.errors.txt`，卡片头部徽标变红（`mermaid 失败 ×N`）。
 3. **预检只查语法。** 语法通过但运行时失败（不支持的语法糖、超时）拦不住已经返回的调用，
    由上面的红框 / 徽标 / `errors.txt` 兜。另外，预检扫的是**页面文件里静态写着的**块——
@@ -650,7 +651,7 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 420 项离线断言：清单 7 / 宿主 146 / mermaid 35 / 客户端 90 / 预设 38 / 模板 67 / 页面 37
+npm test                # 431 项离线断言：清单 7 / 宿主 153 / mermaid 35 / 客户端 94 / 预设 38 / 模板 67 / 页面 37
                         # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 419）
 
 npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区** / 落地副本

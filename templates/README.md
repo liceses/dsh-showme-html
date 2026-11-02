@@ -305,7 +305,7 @@ sequenceDiagram
 > 不是图。要回执就照 skill §3 自己写一段内联 JS，或者另开一页用 `review` / `report` 骨架。
 > **混着用不行**：数据里的 `text` 块是转义文本，图进不去。
 
-图渲染完会自动导出 PNG 到 `.dsh/showme/mermaid/<页面名>.<序号>.png`，
+图渲染完会自动导出 PNG 到 `.dsh/showme/mermaid/<页面短哈希>/<页面名>.<序号>.png`，
 `show_html` 的返回值里就写着路径；想看自己画的图，`read_image` 打开它。
 
 ---

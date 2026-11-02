@@ -84,8 +84,8 @@ check('四套预设样式齐全', () => {
   return missing.length === 0 ? true : `缺 ${missing.join(' ')}`
 })
 
-check('模板资产齐全（内核 + 三个外壳 + 字段表）', () => {
-  const missing = ['core.js', 'review.html', 'pick.html', 'report.html', 'README.md']
+check('模板资产齐全（内核 + 四个外壳 + 字段表）', () => {
+  const missing = ['core.js', 'review.html', 'pick.html', 'report.html', 'doc.html', 'README.md']
     .filter((name) => !existsSync(join(repo, 'templates', name)))
   return missing.length === 0 ? true : `缺 ${missing.join(' ')}`
 })

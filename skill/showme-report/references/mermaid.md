@@ -39,8 +39,9 @@ graph TD
 2. **只检查"静态写着"的块。** 预检读的是页面文件本身；由 JS 在浏览器里拼出来的图它看不到。
    所以别动态生成 mermaid 块（那种页面坏图会直接显示红框，`show_html` 却认为没问题）。
 
-3. **渲染完成后每张图会导出 PNG**，路径是 `.dsh/showme/mermaid/<页面名>.<序号>.png`，
+3. **渲染完成后每张图会导出 PNG**，路径是 `.dsh/showme/mermaid/<页面短哈希>/<页面名>.<序号>.png`，
    `show_html` 的返回值 `mermaid.png[]` 里就写着。**你可以用 `read_image` 打开它看自己画的图。**
+   按页分目录是为了同名页面（`a/review.html` 与 `b/review.html`）不互相覆盖。
 
 ## 支持的图类型（实测）
 

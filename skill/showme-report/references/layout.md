@@ -3,7 +3,13 @@
 > 前提：这一页**引了** `presets/<slug>.css`。引了就必须按下面的共用标记写——四套皮肤
 > 认的是类名，不是你的视觉意图。不引预设时这一份不适用（见主文件的 §2.3）。
 
-## 页面的骨架（四套皮肤都认这十个类）
+## 页面的骨架（四套皮肤都认同一套类名）
+
+下面是**完整骨架** —— 类名就是词汇表本身，不用数个数。`test/presets.test.mjs`
+逐个盯着其中 22 个语义选择器（`.page` `.masthead` `.kicker` `.lead` `.meta`
+`.section` `.card` `.cols` `.stat` `.num` `.chips` `.chip` `.btn` `.table`
+`.callout` `.evidence` `.timeline` `.kv` `.code` `.muted` `.mark` `.rule`），
+少一个四套皮肤就有一套会坏。
 
 ```html
 <div class="page">
