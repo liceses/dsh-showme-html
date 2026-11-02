@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.3.4-blue.svg)
+![Version](https://img.shields.io/badge/version-0.3.5-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -117,6 +117,7 @@ npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / �
 | 页面里的脚本能干什么 | [安全模型](#security) |
 | 卡片为什么不会被折叠 | [卡片在哪一行](#chat-row) |
 | 自动开右栏 / 计划页怎么设 | [设置（在插件页里）](#settings) · [计划页](#plan-page) |
+| 想让回答默认是一页 | [预设：Showme Often](#preset-showme-often) |
 | 刷新会不会丢我填的东西 | [刷新 / 切会话不丢](#draft) |
 | 有什么坑 | [已知限制](#limits) |
 | 想改代码 | [仓库结构](#layout) · [开发](#dev) |
@@ -502,6 +503,28 @@ templates/core.js        内核：渲染与交互全在这里，四份骨架共�
 
 ---
 
+<a id="preset-showme-often"></a>
+## 预设：Showme Often（让回答默认是一页）
+
+插件的工具与计划页解决的是「能不能展示」；**回答形态**由会话预设决定。仓库里的
+[`preset/showme-often/`](<preset/showme-often/README.md>) 是一个独立的 agent 预设 bundle：
+选中它的会话，**默认用展示页回答**，聊天正文只留摘要与要做决定的事。
+
+- **只改一处**：`persona` 前缀里写死了「默认做页」的规则（多条目 / 对比 / 表格 / 流程 / 截图 /
+  待评审 / 可点名 → 一律做页；只有一两句话且无可指的东西才用纯文字；拿不准就做页），
+  并明确压过 `show_html` 工具描述里那句「不要用于普通回答」。
+- **能力不缩水**：插件清单逐字照抄 DSH 自带的 `standard` 预设，页面之外的工具一个不少；
+  **不重复挂本插件**（它是宿主级工具，再挂会撞出两个同名 `show_html`）。
+- **装**：`plugin_manager action=install_bundle target=<仓库>/preset/showme-often`。装完
+  `list_plugins` / 设置里的预设名册多一条 `preset-showme-often`。
+- **选**：新会话的选择器里选它；或 设置 → 预设 → 设为默认。既有会话换不了（DSH 的规则）。
+- **升级 DSH 后**：从新版 `@deepseek-ai/dsh-web-app/presets/standard.patch.yml` 重抄插件清单，
+  只保留本预设的 `persona` 前缀；`complete` 必须保持 `false`（否则顶掉运行时上下文与 `AGENTS.md`）。
+
+这个目录**不进 npm 包**（`files` 里没有 `preset/`），装 `link:` 也不会带上它。
+
+---
+
 <a id="chat-row"></a>
 ## 卡片在哪一行（为什么它不会被「工作步骤」折叠吃掉）
 
@@ -640,6 +663,7 @@ skill/showme-report/  产品核心：SKILL.md（索引，215 行）+ references/
 examples/             示例页源码（页面冒烟测试的夹具；mermaid-demo / mermaid-types 是截图的原件）
 test/                 离线验收：清单 / 宿主 / mermaid / 客户端 / 预设 / 模板 / 页面 七组
 tools/                维护脚本：vendor:mermaid · assets:refresh · asar:list · asar:scan
+preset/showme-often/  会话预设 bundle：让回答默认是一页（独立安装，不进 npm 包）
 docs/                 需求演进与定稿方案
 ```
 
@@ -652,7 +676,7 @@ docs/                 需求演进与定稿方案
 
 ```powershell
 npm test                # 431 项离线断言：清单 7 / 宿主 153 / mermaid 35 / 客户端 94 / 预设 38 / 模板 67 / 页面 37
-                        # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 419）
+                        # （Windows 上建不出软链接时，宿主那组会多打一行 skip，**不计入** 153；能建软链接的机器是 154 / 432）
 
 npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区** / 落地副本
 

@@ -1,5 +1,15 @@
 # 变更记录
 
+## 0.3.5 — 2026-11-03
+
+**仓库内新增一个 agent 预设：Showme Often —— 选中它的会话，回答默认是一页。**
+
+- 位置 `preset/showme-often/`（`package.json` + `cordis.patch.yml` + `README.md`）：独立 bundle、**不进 npm 包**。
+- 只改一处：`persona` 前缀写死「默认做页」的规则（多条目 / 对比 / 表格 / 流程 / 截图 / 待评审 / 可点名 → 一律做页；只有一两句话且无可指的东西才用纯文字；拿不准就做页），并明确压过 `show_html` 工具描述里那句「不要用于普通回答」。
+- 插件清单逐字照抄 DSH 自带的 `standard` 预设（升级 DSH 时重抄、只保留 persona 段）；**不重复挂本插件** —— 它是宿主级工具，再挂会出现两个同名 `show_html`。
+- 安装：`plugin_manager install_bundle`。已在本机 desktop profile 上装好并 applied，`Config.listConfigs` 的预设从 4 条变 5 条；名册与新会话选择器里应出现「Showme Often」。
+- 插件代码未改：`lib/` 一行不动，离线断言仍是 431 项。
+
 ## 0.3.4 — 2026-11-02
 
 **一次通读评审后的八条修复：四条代码/测试、四条文档，外加补 tag。**
