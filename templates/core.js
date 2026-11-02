@@ -345,12 +345,181 @@
         window.parent.postMessage({ type: FEEDBACK_TYPE, text: composeText() }, '*')
       } catch (error) { /* 父页面不在时忽略 */ }
     }
+
+    // 顺手存一份草稿：刷新 / 切会话回来还能捡回选择与备注。
+    saveDraftSoon()
   }
 
   /** 写一句状态提示。 */
   function say(text) {
     var el = document.getElementById('sm-msg')
     if (el !== null) el.textContent = text
+  }
+
+  // ══════════════ 草稿：刷新 / 切会话不丢 ══════════════
+  //
+  // 展示页跑在 sandbox 的不透明源里，localStorage / cookie 都用不了；对宿主的
+  // POST 也会被跨域拦掉。所以这里只做两件事：**把状态 postMessage 给卡片**、
+  // 以及**接收卡片灌回来的草稿**。落盘与读取由同源的卡片负责（lib/client.js）。
+
+  /** 与 lib/client.js 对齐的三个消息类型。 */
+  var DRAFT_TYPE = 'dsh-showme-draft'
+  var DRAFT_READY_TYPE = 'dsh-showme-draft-ready'
+  var DRAFT_RESTORE_TYPE = 'dsh-showme-draft-restore'
+
+  /** 是否跑在卡片里（不是卡片就没有草稿，一切照旧）。 */
+  var inCard = window.parent !== window
+
+  /** 收到卡片回灌之前不写草稿 —— 否则 boot 时那次空 sync 会把旧草稿覆盖掉。 */
+  var draftReady = false
+
+  /** 还没渲染完就收到的草稿先存这里：undefined = 还没收到，null = 没有草稿。 */
+  var pendingDraft
+
+  /** 已经渲染过一次没有（草稿要等有 id 了才能套）。 */
+  var rendered = false
+
+  /** debounce 句柄。 */
+  var draftTimer = null
+
+  /** 这次恢复出来的信息（横幅用）。 */
+  var restored = null
+
+  /** 把 state 摊成草稿要的形状：{ verdicts: {id: word}, notes: {id: text} }。 */
+  function draftPayload() {
+    var out = { verdicts: {}, notes: {} }
+    for (var i = 0; i < ids.length; i++) {
+      var one = state[ids[i]]
+      if (!one) continue
+      if (one.verdict) out.verdicts[ids[i]] = one.verdict
+      if (one.note) out.notes[ids[i]] = one.note
+    }
+    return out
+  }
+
+  /** 立刻把草稿发出去（页面要消失时别等 debounce）。 */
+  function postDraft() {
+    if (!inCard) return
+    if (draftTimer !== null) { clearTimeout(draftTimer); draftTimer = null }
+    if (!draftReady) return
+    try {
+      window.parent.postMessage({ type: DRAFT_TYPE, state: draftPayload() }, '*')
+    } catch (error) { /* 父页面不在就算了 */ }
+  }
+
+  /** 状态变了：等 400ms 再发（打字时别每一键都发）。 */
+  function saveDraftSoon() {
+    if (!inCard || !draftReady) return
+    if (typeof setTimeout !== 'function') return
+    if (draftTimer !== null) clearTimeout(draftTimer)
+    draftTimer = setTimeout(postDraft, 400)
+  }
+
+  /** 把 'YYYY-MM-DDTHH:mm:ss.sssZ' 写成 '10-31 23:12'（本地时间）。 */
+  function localTime(value) {
+    var at = new Date(value)
+    if (isNaN(at.getTime())) return ''
+    function two(number) { return (number < 10 ? '0' : '') + number }
+    return two(at.getMonth() + 1) + '-' + two(at.getDate()) + ' ' + two(at.getHours()) + ':' + two(at.getMinutes())
+  }
+
+  /** 恢复横幅。 */
+  function bannerHtml() {
+    if (restored === null) return ''
+    var when = restored.at ? ' ' + localTime(restored.at) : ''
+    var text = '已恢复' + when + ' 的表态（' + restored.count + ' 条）'
+    if (restored.missing > 0) text += '；其中 ' + restored.missing + ' 条这页已没有，已忽略'
+    return '<div class="sm-draft" role="status"><span>' + esc(text) + '</span>' +
+      '<button type="button" class="sm-draftClear" id="sm-draft-clear">清空</button></div>'
+  }
+
+  /** 只重画横幅那一块。 */
+  function renderDraftBanner() {
+    var host = document.getElementById('sm-banner')
+    if (host !== null) host.innerHTML = bannerHtml()
+  }
+
+  /**
+   * 把草稿套回页面：只认当前这页还存在的 id。
+   * @param draft - 卡片回灌的草稿，或 null（说明没有草稿）。
+   */
+  function applyDraft(draft) {
+    draftReady = true
+    if (!draft) {
+      restored = null
+      renderDraftBanner()
+      return
+    }
+    var known = {}
+    for (var i = 0; i < ids.length; i++) known[ids[i]] = true
+    var incoming = draft.verdicts || {}
+    var notes = draft.notes || {}
+    var count = 0
+    var missing = 0
+    var key
+    for (key in incoming) {
+      if (!Object.prototype.hasOwnProperty.call(incoming, key)) continue
+      if (!known[key]) { missing += 1; continue }
+      var one = state[key] || { verdict: '', note: '' }
+      one.verdict = String(incoming[key] || '')
+      state[key] = one
+      if (one.verdict) count += 1
+    }
+    for (key in notes) {
+      if (!Object.prototype.hasOwnProperty.call(notes, key)) continue
+      if (!known[key]) { missing += 1; continue }
+      var two = state[key] || { verdict: '', note: '' }
+      two.note = String(notes[key] || '')
+      state[key] = two
+    }
+    restored = count === 0 ? null : { at: draft.updatedAt || '', count: count, missing: missing }
+    refreshPressed()
+    sync()
+    renderDraftBanner()
+  }
+
+  /** 清空：页内清掉、通知卡片把草稿也删掉。 */
+  function clearDraft() {
+    state = {}
+    restored = null
+    refreshPressed()
+    sync()
+    renderDraftBanner()
+    if (!inCard) return
+    try {
+      window.parent.postMessage({ type: DRAFT_TYPE, clear: true }, '*')
+    } catch (error) { /* 父页面不在就算了 */ }
+    say('已清空')
+  }
+
+  /** 接上草稿通道：等卡片回灌 + 页面消失前补发一次。 */
+  function bootDraft() {
+    if (!inCard) return
+    if (typeof window.addEventListener !== 'function') return
+    window.addEventListener('message', function (event) {
+      var data = event.data
+      if (!data || data.type !== DRAFT_RESTORE_TYPE) return
+      pendingDraft = data.state === undefined || data.state === null ? null : data.state
+      if (rendered) applyDraft(pendingDraft)
+    })
+    // 页面被卸载 / 切到后台时，debounce 里那一次不能再等。
+    window.addEventListener('pagehide', postDraft)
+    if (document !== undefined && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') postDraft()
+      })
+    }
+    try {
+      window.parent.postMessage({ type: DRAFT_READY_TYPE }, '*')
+    } catch (error) { /* 父页面不在就算了 */ }
+    // 卡片没回话（老宿主 / 没接上）时，别把用户这一轮的选择也锁死。
+    if (typeof setTimeout === 'function') {
+      setTimeout(function () {
+        if (!draftReady) draftReady = true
+      }, 1500)
+    } else {
+      draftReady = true
+    }
   }
 
   /** 开关一个判定。pick 单选模式下互斥。 */
@@ -382,6 +551,7 @@
     main.addEventListener('click', function (event) {
       var target = event.target
       if (!target || !target.getAttribute || !target.className) return
+      if (target.id === 'sm-draft-clear') { clearDraft(); return }
       if (target.className.indexOf('sm-btn') === -1) return
       var id = target.getAttribute('data-id')
       var word = target.getAttribute('data-w')
@@ -475,6 +645,10 @@
     '.sm-img{display:block;width:100%;max-height:360px;object-fit:contain;background:var(--surface-2,#f4f4f4)}',
 
     // 回执区
+    '.sm-draft{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 18px;padding:10px 14px;border:1px dashed var(--line-strong,#d5dae2);border-radius:var(--r-sm,10px);background:var(--surface,#fff);font-size:var(--f-sm,13.5px);color:var(--ink-2,#4b5563)}',
+    '.sm-draft span{flex:1;min-width:200px}',
+    '.sm-draftClear{cursor:pointer;font:500 var(--f-xs,12px)/1 var(--font,sans-serif);padding:7px 12px;border:1px solid var(--line-strong,#d5dae2);border-radius:var(--r-pill,999px);background:var(--surface,#fff);color:var(--ink,#111)}',
+    '.sm-draftClear:hover{background:var(--surface-2,#f4f4f4)}',
     '.sm-progress{margin:0 0 10px;font-size:var(--f-xs,12px);color:var(--muted,#8a8a8a)}',
     '.sm-receipt textarea{width:100%;min-height:110px;box-sizing:border-box;padding:10px;resize:vertical;font:400 var(--f-sm,13px)/1.7 var(--mono,monospace);background:none;color:var(--ink,#111);border:1px solid var(--line,#e5e7eb);border-radius:var(--r-sm,4px)}',
     '.sm-msg{font-size:var(--f-xs,12px);color:var(--muted,#8a8a8a);margin-left:8px}',
@@ -521,7 +695,8 @@
         : '') +
       '</header>'
 
-    document.getElementById('sm-content').innerHTML = body
+    document.getElementById('sm-content').innerHTML =
+      '<div id="sm-banner">' + bannerHtml() + '</div>' + body
     document.getElementById('sm-receipt').innerHTML = receiptHtml()
 
     // 词表必须列出来：用户要知道能填什么，模型要知道收到了什么（skill §3.1）
@@ -531,6 +706,10 @@
 
     wire()
     sync()
+
+    // 草稿可能在渲染前就到了（页面小、卡片快），那时 id 还没有，得等这里再套。
+    rendered = true
+    if (pendingDraft !== undefined) applyDraft(pendingDraft)
   }
 
   /** 启动：拿到数据（静态引入或按同名推导）并渲染。 */
@@ -538,6 +717,9 @@
     var style = document.createElement('style')
     style.textContent = CONTROL_CSS
     document.head.appendChild(style)
+
+    // 先接上草稿通道：卡片会在这之后回灌上次的选择。
+    bootDraft()
 
     // 第一条路：数据已经由页面**静态**引入（<script src="x.data.js"> 排在 core.js 之前）。
     // 这条路在原生文档预览里也能活 —— 它会把文档里的静态 script 打包进那个 blob。

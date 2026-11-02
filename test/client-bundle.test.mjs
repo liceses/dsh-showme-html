@@ -161,7 +161,14 @@ const fakeDocument = {
   removeEventListener: documentTarget.removeEventListener,
 }
 
-const context = vm.createContext({ window: fakeWindow, document: fakeDocument, console, URL })
+/** 记录 bundle 发出的 HTTP 调用（草稿 / 反馈 / mermaid 回执）。 */
+const fetchCalls = []
+async function fakeFetch(url, options) {
+  fetchCalls.push({ url, options })
+  return { ok: true, json: async () => ({ ok: true, draft: null }) }
+}
+
+const context = vm.createContext({ window: fakeWindow, document: fakeDocument, console, URL, fetch: fakeFetch })
 new vm.Script(source, { filename: 'lib/client.js' }).runInContext(context)
 
 console.log('\n[装载]')
@@ -969,6 +976,72 @@ check('缺少 uiConversation 的宿主：不注册 Chat 行（旧宿主照旧内
   plugin.apply(bare)
   assert.ok(injectedWithoutService >= 1, '应该尝试注入过（只是服务不在）')
   assert.equal(chatRowRegistrations.length, before, '没有 uiConversation 时不该注册 Chat 行')
+})
+
+console.log('\n[草稿] 刷新 / 切会话不丢的接线')
+
+check('从镜像地址解出草稿身份（解不出就给 null）', () => {
+  assert.deepEqual(
+    plain(internals.draftIdentityFromUrl('http://h/api/showme/raw/session-abc/.dsh/showme/a.html')),
+    { sessionId: 'session-abc', page: '.dsh/showme/a.html' },
+  )
+  assert.equal(internals.draftIdentityFromUrl('blob:http://h/94d45dc1'), null)
+  assert.equal(internals.draftIdentityFromUrl(''), null)
+})
+
+check('草稿载荷只留非空字符串', () => {
+  const payload = plain(
+    internals.draftPayloadOf({ state: { verdicts: { a: '同意', b: '' }, notes: { c: '长备注', d: 3 } } }),
+  )
+  assert.deepEqual(payload, { verdicts: { a: '同意' }, notes: { c: '长备注' } })
+})
+
+check('页面变化 → 卡片代发 POST /api/showme/draft', async () => {
+  internals.relayDraft(
+    { sessionId: 's1', page: '.dsh/showme/a.html' },
+    { state: { verdicts: { a: '同意' }, notes: { a: '数字太小' } } },
+  )
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  const call = fetchCalls
+    .filter((entry) => entry.url === '/api/showme/draft')
+    .filter((entry) => JSON.parse(entry.options.body).page === '.dsh/showme/a.html')
+    .pop()
+  assert.ok(call !== undefined, '没有发草稿请求')
+  assert.equal(call.options.method, 'POST')
+  const body = JSON.parse(call.options.body)
+  assert.equal(body.sessionId, 's1')
+  assert.equal(body.page, '.dsh/showme/a.html')
+  assert.deepEqual(body.verdicts, { a: '同意' })
+  assert.deepEqual(body.notes, { a: '数字太小' })
+})
+
+check('清空 → 同一个路由发 clear', async () => {
+  internals.relayDraft({ sessionId: 's1', page: 'p.html' }, { clear: true })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  const body = JSON.parse(fetchCalls.filter((entry) => entry.url === '/api/showme/draft').pop().options.body)
+  assert.equal(body.clear, true)
+})
+
+check('页面 ready → 卡片读草稿（GET 带 session 与 page）', async () => {
+  const draft = await internals.fetchDraft({ sessionId: 's 1', page: 'a b.html' })
+  assert.equal(draft, null)
+  const call = fetchCalls.filter((entry) => entry.url.startsWith('/api/showme/draft?')).pop()
+  assert.equal(call.url, '/api/showme/draft?session=s%201&page=a%20b.html')
+})
+
+check('两个宿主都挂上了草稿通道（卡片 + 右栏正文）', () => {
+  const hits = code.match(/useDraftBridge\(url\)/g) ?? []
+  assert.ok(hits.length >= 2, `只找到 ${hits.length} 处，卡片与右栏正文都该挂`)
+  assert.match(code, /DRAFT_RESTORE_TYPE/)
+  assert.match(code, /source\?\.postMessage\(\{ type: DRAFT_RESTORE_TYPE/, '没有把草稿灌回页面')
+})
+
+check('页面交回的反馈由卡片补发到 /feedback（页面自己 POST 会被跨域拦掉）', async () => {
+  internals.relayFeedback({ sessionId: 's1', page: 'p.html' }, 'a 同意')
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  const call = fetchCalls.filter((entry) => entry.url === '/api/showme/feedback').pop()
+  assert.ok(call !== undefined, '没有补发反馈')
+  assert.equal(JSON.parse(call.options.body).text, 'a 同意')
 })
 
 await Promise.all(asyncChecks)

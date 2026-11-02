@@ -11,9 +11,10 @@
 import assert from 'node:assert/strict'
 import { request as httpRequest, createServer } from 'node:http'
 import { existsSync } from 'node:fs'
-import { mkdtemp, mkdir, readFile, readdir, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, symlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir, homedir } from 'node:os'
 import { join, dirname } from 'node:path'
+import { createHash } from 'node:crypto'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -705,6 +706,88 @@ check('无 mermaid 的页面：count 为 0，不挡路', () => {
   assert.equal(plainResult.mermaid.count, 0)
   assert.equal(plainResult.mermaid.checked, true)
 })
+
+console.log('\\n[草稿] 刷新 / 切会话不丢')
+
+// 草稿由卡片（同源）调用：页面在不透明源里自己 POST 会被跨域拦掉。
+const draftPath = '.dsh/showme/review.html'
+const draftPost = (body) =>
+  rawRequest(`${base}/draft`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+const draftGet = (session, page) =>
+  rawRequest(`${base}/draft?session=${encodeURIComponent(session)}&page=${encodeURIComponent(page)}`)
+
+const savedDraft = await draftPost({
+  sessionId: 'live-session',
+  page: draftPath,
+  verdicts: { 'hero-v3': '同意', 'stats-panel': '要改' },
+  notes: { 'stats-panel': '数字太小' },
+})
+check('草稿写入 200', () => assert.equal(savedDraft.status, 200))
+check('草稿写入回执', () => {
+  const body = JSON.parse(savedDraft.body)
+  assert.equal(body.ok, true)
+  assert.equal(body.saved, true)
+  assert.match(body.path, /^\.dsh\/showme\/drafts\/[0-9a-f]{40}\.json$/)
+})
+
+const readBack = await draftGet('live-session', draftPath)
+check('草稿读回：判定与备注都在', () => {
+  const draft = JSON.parse(readBack.body).draft
+  assert.ok(draft !== null, '没读到草稿')
+  assert.equal(draft.verdicts['hero-v3'], '同意')
+  assert.equal(draft.verdicts['stats-panel'], '要改')
+  assert.equal(draft.notes['stats-panel'], '数字太小')
+  assert.equal(typeof draft.updatedAt, 'string')
+})
+
+const draftNames = await readdir(join(workspace, '.dsh', 'showme', 'drafts')).catch(() => [])
+check('草稿落在工作区的 drafts 目录里（不进 git）', () =>
+  assert.ok(draftNames.filter((name) => name.endsWith('.json')).length >= 1, '没落盘'),
+)
+
+const noDraft = await draftGet('live-session', 'stills/none.html')
+check('没有草稿：回 draft: null（不是 404）', () => {
+  assert.equal(noDraft.status, 200)
+  assert.equal(JSON.parse(noDraft.body).draft, null)
+})
+
+const cleared = await draftPost({ sessionId: 'live-session', page: draftPath, clear: true })
+check('清空：真的删掉', () => assert.equal(JSON.parse(cleared.body).cleared, true))
+const afterClear = await draftGet('live-session', draftPath)
+check('清空后读回是 null', () => assert.equal(JSON.parse(afterClear.body).draft, null))
+
+const unknownDraft = await draftPost({ sessionId: 'no-such-session', page: draftPath, verdicts: {} })
+check('未知会话：404（不往错的地方写）', () => assert.equal(unknownDraft.status, 404))
+
+const escapeDraft = await draftPost({ sessionId: 'live-session', page: '../escape.html', verdicts: {} })
+check('页面路径越界：403', () => assert.equal(escapeDraft.status, 403))
+
+const bigDraft = await draftPost({
+  sessionId: 'live-session',
+  page: draftPath,
+  notes: { big: 'x'.repeat(80 * 1024) },
+})
+check('草稿过大：413', () => assert.equal(bigDraft.status, 413))
+
+const putDraft = await rawRequest(`${base}/draft`, { method: 'PUT' })
+check('PUT：405', () => assert.equal(putDraft.status, 405))
+
+// 过期清理：塞一个 40 天前的草稿文件，再写一份新的，老的那份应该被顺手清掉。
+const draftDir = join(workspace, '.dsh', 'showme', 'drafts')
+const staleName = createHash('sha1').update('live-session\\nstale-page.html').digest('hex')
+const stalePath = join(draftDir, `${staleName}.json`)
+await writeFile(stalePath, '{"verdicts":{}}\\n', 'utf8')
+const staleAt = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000)
+await utimes(stalePath, staleAt, staleAt)
+await draftPost({ sessionId: 'live-session', page: draftPath, verdicts: { 'hero-v3': '不要' } })
+const afterPrune = await readdir(draftDir)
+check('过期草稿被顺手清掉（30 天）', () =>
+  assert.ok(!afterPrune.includes(`${staleName}.json`), '40 天前的草稿还在'),
+)
 
 server.close()
 

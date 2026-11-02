@@ -108,14 +108,28 @@ async function run(shape, data, pageName = 'demo.html', options = {}) {
       return element
     },
     querySelectorAll: () => [],
+    visibilityState: 'visible',
     addEventListener: () => {},
     head: { appendChild: (element) => appended.push(element) },
   }
 
+  // 草稿通道要用：message 事件与 pagehide 得能被测试"发"进来。
+  const listeners = new Map()
   const window = {
-    parent: { postMessage: (message) => messages.push(message) },
+    parent: null,
     SHOWME_SHAPE: shape,
+    addEventListener(type, handler) {
+      if (!listeners.has(type)) listeners.set(type, [])
+      listeners.get(type).push(handler)
+    },
+    removeEventListener(type, handler) {
+      const list = listeners.get(type) ?? []
+      const at = list.indexOf(handler)
+      if (at >= 0) list.splice(at, 1)
+    },
   }
+  // 不在卡片里（浏览器直开）：window.parent === window。
+  window.parent = options.standalone === true ? window : { postMessage: (message) => messages.push(message) }
   // 静态引入那条路：数据在 core.js 跑之前就已经在 window 上了。
   if (host === 'static') window.SHOWME = data
 
@@ -125,9 +139,16 @@ async function run(shape, data, pageName = 'demo.html', options = {}) {
     pathname: host === 'blob' ? '/94d45dc1-3935-4e40-b3fc-57931b1d5350' : `/api/showme/raw/sid/.dsh/showme/${pageName}`,
   }
 
-  const context = vm.createContext({ window, document, location, navigator: {}, console, Object, Array, String })
+  const context = vm.createContext({
+    window, document, location, navigator: {}, console, Object, Array, String, setTimeout, clearTimeout,
+  })
   new vm.Script(source, { filename: 'core.js' }).runInContext(context)
   await new Promise((resolve) => setTimeout(resolve, 0))
+
+  /** 往页面里发一个事件（草稿通道靠它）。 */
+  function emit(type, event) {
+    for (const handler of listeners.get(type) ?? []) handler(event)
+  }
 
   return {
     head: elements.get('sm-masthead'),
@@ -135,6 +156,8 @@ async function run(shape, data, pageName = 'demo.html', options = {}) {
     receipt: elements.get('sm-receipt'),
     out: elements.get('sm-out'),
     words: elements.get('sm-words'),
+    emit,
+    banner: () => elements.get('sm-banner')?.innerHTML ?? '',
     messages,
     document,
     appended,
@@ -399,6 +422,85 @@ check('README 覆盖三个形状', () => {
 check('README 明确劝退读内核', () => assert.match(readme, /不是 `core\.js`/))
 check('README 说了数据文件必须和页面同名', () => assert.match(readme, /必须和页面同名/))
 check('内核头部也指向 README', () => assert.match(source, /别读这个文件/))
+
+console.log('\n[草稿] 刷新 / 切会话不丢')
+
+// 页面 boot 完要先给卡片打个招呼：卡片收到 ready 才去读草稿灌回来。
+check('boot 时向卡片要一次草稿', () => {
+  assert.ok(
+    reviewResult.messages.some((message) => message.type === 'dsh-showme-draft-ready'),
+    '没有发 ready，卡片不会回灌草稿',
+  )
+})
+
+// 卡片把上次的状态灌回来（其中 ghost 这一页已经没有这个 id 了）。
+reviewResult.emit('message', {
+  data: {
+    type: 'dsh-showme-draft-restore',
+    state: {
+      updatedAt: '2026-10-31T15:12:00.000Z',
+      verdicts: { 'hero-v3': '同意', ghost: '不要' },
+      notes: { 'hero-v4': '图太小' },
+    },
+  },
+})
+
+check('恢复：判定套回页面、组句重新算出来', () => {
+  assert.equal(reviewResult.out.value, 'hero-v3 同意')
+})
+check('恢复：横幅写明时间与条数，并说明有对不上的 id', () => {
+  const banner = reviewResult.banner()
+  assert.match(banner, /已恢复/, '没有恢复横幅')
+  assert.match(banner, /1 条/, '横幅没写恢复了几条')
+  assert.match(banner, /这页已没有/, '没说清有对不上的 id')
+})
+
+// 改一条判定 → 400ms 后应该有一帧草稿发出去（含判定与备注）。
+reviewResult.content.handlers.click({
+  target: {
+    className: 'sm-btn',
+    getAttribute: (name) => (name === 'data-id' ? 'hero-v4' : name === 'data-w' ? '要改' : null),
+  },
+})
+await new Promise((resolve) => setTimeout(resolve, 600))
+const drafts = reviewResult.messages.filter((message) => message.type === 'dsh-showme-draft')
+
+check('变化后把草稿 postMessage 给卡片（判定与备注都在）', () => {
+  const last = drafts[drafts.length - 1]
+  assert.ok(last !== undefined, '一帧草稿都没发')
+  assert.equal(last.state.verdicts['hero-v4'], '要改')
+  assert.equal(last.state.verdicts['hero-v3'], '同意')
+  assert.equal(last.state.notes['hero-v4'], '图太小')
+})
+
+reviewResult.content.handlers.click({
+  target: { id: 'sm-draft-clear', className: 'sm-draftClear', getAttribute: () => null },
+})
+await new Promise((resolve) => setTimeout(resolve, 20))
+check('清空：页内清掉，并让卡片把草稿删掉', () => {
+  assert.equal(reviewResult.out.value, '')
+  const last = reviewResult.messages[reviewResult.messages.length - 1]
+  assert.equal(last.type, 'dsh-showme-draft')
+  assert.equal(last.clear, true)
+})
+
+const stranger = await run('review', {
+  title: '换过一版',
+  sections: [{ heading: 'h', items: [{ id: 'fresh', title: '新条目' }] }],
+})
+stranger.emit('message', {
+  data: { type: 'dsh-showme-draft-restore', state: { verdicts: { ghost: '同意' }, notes: {} } },
+})
+check('草稿里的 id 一个都对不上：不套用、也不弹横幅', () => {
+  assert.equal(stranger.out.value, '')
+  assert.equal(stranger.banner(), '')
+})
+
+const standalone = await run('review', { title: '浏览器直开', sections: [] }, 'demo.html', { standalone: true })
+check('不在卡片里（浏览器直开）：不发 ready、也不发草稿', () => {
+  assert.ok(!standalone.messages.some((message) => message.type === 'dsh-showme-draft-ready'))
+  assert.ok(!standalone.messages.some((message) => message.type === 'dsh-showme-draft'))
+})
 
 console.log('\n[皮肤] 节奏与分组（横屏用满宽度、去掉重复分隔线）')
 

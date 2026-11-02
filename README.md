@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.2.6-blue.svg)
+![Version](https://img.shields.io/badge/version-0.2.7-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -116,6 +116,7 @@ npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / �
 | 它到底怎么实现的 | [工作原理](#how) |
 | 页面里的脚本能干什么 | [安全模型](#security) |
 | 卡片为什么不会被折叠 | [卡片在哪一行](#chat-row) |
+| 刷新会不会丢我填的东西 | [刷新 / 切会话不丢](#draft) |
 | 有什么坑 | [已知限制](#limits) |
 | 想改代码 | [仓库结构](#layout) · [开发](#dev) |
 | 许可 | [许可](#license) |
@@ -182,6 +183,7 @@ agent 干完一件大事，甩给你 200 行 Markdown。你读完了，但你没
 | **侧栏打开** | 把这一页放进**原生右侧栏**（插件自己注册的页 tab 类型 `showme-page`，正文就是同一个镜像地址的 iframe）；右栏服务不在时兜底到新标签页并说明。**不认领任何后缀**——`.html` 的默认归宿仍然是原生 `builtin` 预览。 |
 | **画面内全屏** | 走框架级浮层，Esc 退出回到原位、滚动位置不丢。**控件全在底部**：Windows 桌面端顶部 40px 是原生窗口按钮、画在网页之上，放在那里永远点不到（这条是踩过的现场）。 |
 | **反馈两条路** | ① 页面 `postMessage` 给卡片 → 一键填入输入框；② 页面 `POST /api/showme/feedback` 追加到 `<工作区>/.dsh/showme/inbox.jsonl`。都不实现也不影响——页面里的可选中文本本来就是通用交换格式。 |
+| **草稿不丢** | 页面里选的判定、写了一半的备注会自动存一份草稿：**刷新 iframe、切会话再回来、卡片重新挂载**都还在，顶部横幅写明「已恢复 …·清空」。见 [刷新 / 切会话不丢](#draft)。 |
 | **四套预设样式** | 见下。 |
 | **模板按内容定密度** | 条目不是"一人一张卡"：**纯文字排成一块面板、一行一条，只有带 `image` 的条目才单独成卡**。同屏不再是一排一模一样的卡，视觉重量只留给真需要看图的东西；横屏（≥900px）报头走两栏、文字行的判定控件靠右成一列，卡片里（≤760px）行折成一列、判定控件铺满。 |
 | **mermaid 图** | 页面里写 `<pre class="mermaid">graph TD; A-->B</pre>` 就会渲染成 SVG。宿主侧有**同步语法预检**：图写错 → `show_html` 这次调用**直接失败**，报错是 mermaid 自己的 `Parse error on line N` 原文。渲染完每张图导出一张 PNG，路径随工具结果返回，agent 可以 `read_image` 看自己画的图。见 [mermaid](#mermaid)。 |
@@ -467,6 +469,34 @@ DSH 自己的错误行（`turn-error`）用的就是同一招。工具行留着�
 
 ---
 
+<a id="draft"></a>
+## 刷新 / 切会话不丢（草稿）
+
+页面里选了的判定、写了一半的备注，**刷新 iframe、切换会话再回来、卡片重新挂载**之后还在。
+
+为什么不靠浏览器自己的存储：展示页是 `sandbox` **不透明源**（响应头 CSP + iframe 属性都这么要求），
+`localStorage` / `sessionStorage` / `cookie` 一律抛 `SecurityError`，对宿主的 `POST` 也会被跨域拦掉。
+所以走的是和 mermaid 回执同一条路：
+
+```
+页面  --postMessage-->  卡片（同源）  --POST /api/showme/draft-->  <工作区>/.dsh/showme/drafts/<sha1>.json
+页面  <--postMessage--  卡片（同源）  <--GET  /api/showme/draft--
+```
+
+- 页面每次变化**延迟 400ms** 存一次，`pagehide` / 切到后台时立即补一次（不会把最后那 400ms 丢掉）。
+- 页面加载完发 `dsh-showme-draft-ready`，卡片读回草稿再灌进页面；套用后顶部出现一条横幅：
+  **「已恢复 10-31 23:12 的表态（3 条）· 清空」**——不静默复活旧选择，不想留就一键清掉。
+- 页面被重新生成过（id 变了）时只套能对上的，横幅会写「其中 N 条这页已没有，已忽略」；
+  一个都对不上就不套用、也不弹横幅。
+- 顺带：页面交回的反馈现在由卡片补发一份到 `/feedback`（页面自己 POST 在卡片里必然被拦），
+  所以 `inbox.jsonl` 这条通道在卡片里也真的能用了。
+- 草稿只留在本机工作区，`< 30 天`、最多 `200` 份，超了自动清；单份上限 64 KiB。
+
+**升级注意**：草稿靠宿主新增的 `/api/showme/draft` 路由，**要重启一次实例**才生效；
+模板 `templates/core.js` 的落地副本是 create-only，记得 `npm run assets:refresh`。
+
+---
+
 <a id="security"></a>
 ## 安全模型（两层，刻意不同）
 
@@ -498,7 +528,8 @@ DSH 自己的错误行（`turn-error`）用的就是同一招。工具行留着�
 <a id="limits"></a>
 ## 已知限制
 
-- **不缓存**：每次刷新都重读文件（故意的——页面会被反复改）。
+- **不缓存**：每次刷新都重读文件（故意的——页面会被反复改）。这条只管**文件内容**：
+  页面里的选择与备注由 [草稿](#draft) 另行保存，刷新 / 切会话回来还在。
 - **不做范围请求**：大视频文件会整个读进内存再发。
 - **不做文件监听**：改完文件要按卡片上的「刷新」（自动刷新属于后续里程碑）。
 - **页面在卡片里能力受限**：见上表；需要 `localStorage` / 表单 / 下载时请用「浏览器打开」。
@@ -555,8 +586,8 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 351 项离线断言：清单 7 / 宿主 116 / mermaid 35 / 客户端 72 / 预设 38 / 模板 46 / 页面 37
-                        # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 352）
+npm test                # 377 项离线断言：清单 7 / 宿主 128 / mermaid 35 / 客户端 79 / 预设 38 / 模板 53 / 页面 37
+                        # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 378）
 
 npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区** / 落地副本
 
