@@ -16,7 +16,17 @@
 这类问题的答案只在**装好的那份代码**里。装一个 `@electron/asar` 只为读它，不值得；
 所以这里有一个 60 行的只读解析器。
 
-## 三个脚本
+## 五个脚本
+
+| 脚本 | 干什么 | 对应 npm script |
+|---|---|---|
+| `asar-lib.mjs` | 只读 asar 解析器（`asar-peek` / `asar-scan` 共用，不单独跑） | — |
+| `asar-peek.mjs` | `list <正则>` 按路径找条目；`x <目录> <正则>` 取出来读 | `asar:list` |
+| `asar-scan.mjs` | 只知道字符串、不知道在哪个包里时，扫字节并打上下文 | `asar:scan` |
+| `refresh-assets.mjs` | 同步工作区的落地副本（`templates/` 覆盖、`presets/` 只补缺） | `assets:refresh` |
+| `vendor-mermaid.mjs` | 重新取 `mermaid@<版本>` 的 dist 单文件进 `vendor/`，并打印 sha256 | `vendor:mermaid` |
+
+### 读 asar
 
 ```bash
 # 1) 按路径找条目（正则，大小写不敏感）
@@ -29,6 +39,13 @@ node tools/asar-peek.mjs x .dsh/out 'dsh-client-ui-sidebar-right/lib/client.js'
 # 3) 只知道字符串、不知道在哪个包里时，直接扫字节 + 打上下文
 node tools/asar-scan.mjs titleBarOverlay 300 2
 node tools/asar-scan.mjs 'unknown session' 200 3
+```
+
+### 同步 / 重取资产
+
+```bash
+npm run assets:refresh    # 改了 templates/ 或 styles/ 之后同步到 .dsh/showme/ 落地副本
+npm run vendor:mermaid    # 换 mermaid 版本时重取（版本号在脚本里，sha256 会打到 stdout）
 ```
 
 归档路径默认是 `D:/applications/dshDesktop/resources/app.asar`（Windows 桌面版），

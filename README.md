@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.3.1-blue.svg)
+![Version](https://img.shields.io/badge/version-0.3.2-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -111,7 +111,7 @@ npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / �
 | 它有哪些能力 | [核心能力](#features) |
 | 四套皮肤长什么样 | [四套预设样式](#presets) |
 | 流程图 / 时序图怎么写 | [页面里画图：mermaid](#mermaid) |
-| 想少写点代码 | [模板：三份骨架](#templates) |
+| 想少写点代码 | [模板：四份骨架](#templates) |
 | 那个 skill 和插件什么关系 | [`showme-report` 与 DSH 的关系](#skill) |
 | 它到底怎么实现的 | [工作原理](#how) |
 | 页面里的脚本能干什么 | [安全模型](#security) |
@@ -298,10 +298,13 @@ pie / radar / treemap / wardley / cynefin / info / railroad / treeview / eventmo
 ---
 
 <a id="templates"></a>
-## 模板：三份骨架
+## 模板：四份骨架
 
 skill 用文字规定"回执怎么做"，模型每次都重新实现一遍，于是**控件位置、组句、通道时机反复出错**。
 模板把"实现"变成"填数据"。
+
+四份里前三份是**条目式**（一排可点名、可表态的东西），`doc` 是**文档式**（没有判定与回执，
+只有阅读与「复制全文」）—— 选哪一份看"用户看完要不要表态"。
 
 文本字段只认四种行内写法（`**粗**`、`` `代码` ``、`[文字](https://…)`、换行）；表格、列表、引用、标题、围栏代码**必须用块类型**——数据里写成 markdown 的话，`show_html` 会当场失败并告诉你该用哪个块，而不是把星号和竖线原样显示给用户。要原样展示一段 markdown 时，给那个 `text` 块加 `plain: true`。
 
@@ -321,7 +324,7 @@ skill 用文字规定"回执怎么做"，模型每次都重新实现一遍，于
 
 ```
 templates/<shape>.html   外壳（**直接 write，别 cp** —— 见下）
-templates/core.js        内核：渲染与交互全在这里，三个形状共用一份，别读、别改
+templates/core.js        内核：渲染与交互全在这里，四份骨架共用一份，别读、别改
 <名字>.html              你写的页面
 <名字>.data.js           ← 你唯一要写的，内容就是 window.SHOWME = { … }
 ```
@@ -347,10 +350,10 @@ templates/core.js        内核：渲染与交互全在这里，三个形状共�
 
 **文件名必须同名**：`mypage.html` ↔ `mypage.data.js`（内核按页面文件名推导）。
 
-> 📖 **数据字段表在 [`templates/README.md`](templates/README.md)**——三个形状、全部字段、
-> 10 种内容块、常见错误，4KB 一份。它也会落到 `.dsh/showme/templates/README.md`。
+> 📖 **数据字段表在 [`templates/README.md`](templates/README.md)**——四份骨架、全部字段、
+> 10 种内容块、常见错误，约 14KB 一份。它也会落到 `.dsh/showme/templates/README.md`。
 >
-> **不要读 `core.js`**：那是实现（20KB），字段表那一份就够了。
+> **不要读 `core.js`**：那是实现（约 40KB），字段表那一份就够了。
 > 实测过：一个会话为了搞清"它认哪些块类型"，把内核通读了一遍（≈5–6 千 token），
 > 而答案就是那张 10 行的块类型表。`test/templates.test.mjs` 里有**一条专门盯着
 > 这份文档与内核一致性的测试**——内核加了块类型而 README 没跟上，测试会红。
@@ -359,7 +362,7 @@ templates/core.js        内核：渲染与交互全在这里，三个形状共�
   而且每次都可能把回执写错。
 - **为什么数据走 `<script src>` 而不是 `fetch`**：展示页在 sandbox 的不透明源里，
   `fetch` 同源资源会被当成跨域请求拦掉（我们不发 CORS 头）。经典 script 不受这条限制。
-- **内核只写一份**：三个形状共用 `core.js`。这一路我已经被"抄来抄去抄出 bug"咬过一次
+- **内核只写一份**：四份骨架共用 `core.js`。这一路我已经被"抄来抄去抄出 bug"咬过一次
   （照抄 `dsh-text-drop` 的 `props.input`，而那个属性根本不存在），不想再来第二次。
 - **模板是可选骨架，不是形式强制**：架构图、时序图、长文分析不是"条目式"的形状，
   那就自己写——§3 的回执契约、§4 的通道、§5 的沙箱约束照样适用。
@@ -375,7 +378,7 @@ templates/core.js        内核：渲染与交互全在这里，三个形状共�
 
 | | 是什么 | 住在哪 |
 |---|---|---|
-| 插件本体 | 工具 `show_html` + 镜像读路由 + 对话内卡片 + 四套预设 + 三份模板 | `lib/` `styles/` `templates/` |
+| 插件本体 | 工具 `show_html` + 镜像读路由 + 对话内卡片 + 四套预设 + 四份模板 | `lib/` `styles/` `templates/` |
 | skill `showme-report` | **教 agent 怎么写这一页**：功能契约、回执交换格式、沙箱坑 | `skill/showme-report/SKILL.md` |
 
 **DSH 的 skill 是"按需加载的说明书"**：平时不进上下文，模型判断该用时才读进来。
@@ -481,8 +484,8 @@ templates/core.js        内核：渲染与交互全在这里，三个形状共�
 
 **怎么触发**
 
-1. 插件在系统提示里追加一段 `showme:plan-page`（`planPage: off` 时为空串），告诉模型：
-   涉及方案对比 / 多变体 / 证据 / 多步取舍时，额外用模板写一页，并在 markdown 第一段写一行
+1. 插件在系统提示里追加一段 `showme:plan-page`（`planPage: off` 时为空串；**不在 plan 模式时整段不注入**），
+   告诉模型：涉及方案对比 / 多变体 / 证据 / 多步取舍时，额外用模板写一页，并在 markdown 第一段写一行
    `展示页：<工作区相对路径>`。
 2. **写页面那一刻**：卡片按设置自动在右栏打开它。
 3. **评审出现那一刻**：评审 action 槽里会多一个「打开展示页」按钮，并按设置自动开一次。
@@ -626,7 +629,7 @@ lib/mermaid-boot.js   注入页面的引导脚本：加载 mermaid、逐块渲�
 lib/client.js         浏览器半区：对话卡片 + Chat 行定义 + 画面内全屏 + 输入框镜像（closure-factory）
 styles/*.css          四套预设样式（插件资产，宿主动态落地到工作区）
 styles/index.json     预设清单：一行 default 就是默认皮肤
-templates/            三份骨架 + core.js（插件资产，同样动态落地）
+templates/            四份骨架（review / pick / report / doc）+ core.js（插件资产，同样动态落地）
 vendor/mermaid.min.js mermaid 12.2.0 的 dist 单文件（5.49 MB，sha256 钉在 vendor/README.md）
 skill/showme-report/  产品核心：SKILL.md（索引，215 行）+ references/（字段表、版式、mermaid、沙箱、自检五份，按需读）
 examples/             示例页源码（页面冒烟测试的夹具；mermaid-demo / mermaid-types 是截图的原件）
@@ -643,8 +646,8 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 413 项离线断言：清单 7 / 宿主 142 / mermaid 35 / 客户端 87 / 预设 38 / 模板 67 / 页面 37
-                        # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 412）
+npm test                # 417 项离线断言：清单 7 / 宿主 146 / mermaid 35 / 客户端 87 / 预设 38 / 模板 67 / 页面 37
+                        # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 416）
 
 npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区** / 落地副本
 

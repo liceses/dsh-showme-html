@@ -94,6 +94,8 @@ const captured = { route: null, tool: null, promptSections: [] }
 const services = {
   // 真实契约：`sessions.get(id)` 返回 Session，暴露的是 `header.cwd`（**没有 meta**）。
   // meta-session 是刻意留的形状容忍用例。
+  // 计划页提示的门控：只有这个会话在 plan 模式里。
+  planMode: { loggedActive: (session) => session === 'plan-on' },
   sessions: {
     get: (id) => {
       if (id === 'live-session') return { header: { cwd: workspace } }
@@ -898,6 +900,32 @@ const prefsJunk = JSON.parse((await postPrefs({ planPage: 'nonsense', hack: 1 })
 check('非法档位与未知键被忽略', () => {
   assert.equal(prefsJunk.planPage, 'require')
   assert.equal('hack' in prefsJunk, false)
+})
+
+// 计划页提示只该在 plan 模式激活时注入（拿不到状态时 fail-open）。
+const planSection = captured.promptSections.find((one) => one.name === 'showme:plan-page')
+check('计划页提示：plan 模式未激活 → 不注入', () => {
+  assert.ok(planSection !== undefined, 'systemPrompt 段没注册')
+  assert.equal(planSection.text({ agent: { session: 'idle' } }), '')
+})
+check('计划页提示：激活 → 注入，且带「展示页：」锚点', () => {
+  const text = planSection.text({ agent: { session: 'plan-on' } })
+  assert.ok(text.length > 80, '这段太短，像没注入')
+  assert.ok(text.includes('展示页：'), '缺少 markdown 锚点说明')
+})
+check('计划页提示：缺服务 / 读状态抛错 → 照旧注入（fail-open）', () => {
+  const saved = services.planMode
+  try {
+    services.planMode = undefined
+    assert.ok(planSection.text({ agent: { session: 'idle' } }).length > 0, '缺服务时不该静默')
+    services.planMode = { loggedActive: () => { throw new Error('projection missing') } }
+    assert.ok(planSection.text({ agent: { session: 'idle' } }).length > 0, '抛错时不该静默')
+  } finally {
+    services.planMode = saved
+  }
+})
+check('计划页提示：没有 agent 上下文 → 空串', () => {
+  assert.equal(planSection.text({}), '')
 })
 
 const prefsPut = await rawRequest(`${base}/prefs`, { method: 'PUT' })

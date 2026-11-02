@@ -49,7 +49,7 @@ whenToUse: 你准备用 HTML 页面代替长篇 Markdown 向用户汇报；或�
 <script src="templates/core.js"></script></body></html>
 ```
 
-**字段与块类型**：`.dsh/showme/templates/README.md` 是唯一真源（4KB）；速查版见 `references/templates.md`。
+**字段与块类型**：`.dsh/showme/templates/README.md` 是唯一真源（约 14KB）；速查版见 `references/templates.md`。
 **不要读 `core.js`**——那是实现。
 
 - 文本字段只认四种行内写法：`**粗**`、`` `代码` ``、`[文字](https://…)`、换行；

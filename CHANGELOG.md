@@ -1,5 +1,39 @@
 # 变更记录
 
+## 0.3.2 — 2026-11-02
+
+**文档一致性巡检 + 计划页真机验收，外加一处「提示无条件注入」的修复。**
+
+### 文档漂移（逐处，全部实测）
+- **骨架计数**：`README.md`（目录、标题、能力表、结构清单、"内核只写一份"那句）、`templates/README.md`（开头、"想画图"一节、常见错误表）、`references/templates.md` 一共 10 处还写着"三份骨架 / 三个形状"——`doc` 已经随包发布，统一改成**四份**，并区分"前三份条目式 / `doc` 文档式"。
+- **体积声明**（四份文件里重复的同一个事实）：`templates/README.md` 实际 **14,475 字节**却写 "4KB"（README:354、SKILL.md:52、references/templates.md:3）；`templates/core.js` 实际 **40,903 字节**却写 "20KB"（README:356、templates/README.md:5）。全部改成"约 14KB / 约 40KB"。
+- **`doc` 形状没有数据示例**：`templates/README.md` 只在骨架表里一行，补一节形状说明 + 可直接抄的最小数据（并写明它是文档式、不渲染 `items`）。
+- **`tools/README.md`** 说"三个脚本"，实际五个（`asar-lib` / `asar-peek` / `asar-scan` / `refresh-assets` / `vendor-mermaid`）：改成表 + 两组用法。
+- **历史文档**：`docs/方案与验收-v4.md` 加"⚠️ 历史文档（0.1.0 时代）"头并注明当时的 75/88 项断言；`docs/0.1.7-native-preview-compat-plan.md` 状态行补"范围止于 0.1.7 共存"+ §1 客户端座位表补 0.2.4 之后的第四个座位与另外两个槽位。
+- **断言数**：`docs/方案与验收-v4.md` banner 里的"现在 413"改为 417；`README.md` 的 `npm test` 行同步 417（宿主 146）。
+
+### 计划页真机验收（0.3.0 那条链路第一次真的跑通）
+环境：隔离实例 `RELAY_FORWARDER_PORT=18768 dsh web --port 3317 --no-open`，带启动 token 进入；为了让结论确定，先把偏好临时设为 `planPage: require` / `planPageOpenOnReview: true` / `autoOpenSidebar: false`（**测完已恢复**：`~/.dsh/showme/prefs.json` 原本不存在，已删除）。
+
+跑的是 `/plan …`（用命令进入计划模式），一个回合内拿到：
+- `command/run {name:"plan"}` → 计划模式激活；
+- `tool/call show_html {"path":".dsh/showme/plan-doc-consistency.html"}` 且校验通过（页面 499 B、数据 4.4 KB 落盘）；
+- `tool/call exit_plan_mode`，其 markdown **第二行就是** `展示页：.dsh/showme/plan-doc-consistency.html`；
+- DOM 实测：评审面板里出现 `.dsh-showme-planOpen`（文案「打开展示页」）；**右栏自动开出 tab「展示页」**，其 iframe `src=/api/showme/raw/session-e995d0c9-…/.dsh/showme/plan-doc-consistency.html` 已渲染出页面标题；同一回合的 Chat 行卡片（`[data-chat-flow-kind="showme-page"]`，1 个 iframe）也在。
+- 未单独点验：手动再点一次「打开展示页」是否幂等（自动打开走的是同一个 `openShowmePage()`，已覆盖）。
+
+顺带：那一次回合自己扫出了本节的 9 处漂移 —— 计划页不只是装饰，它把"要改哪些文档"变成了可核对的一页。
+
+### 修复：计划页提示不再无条件注入
+`showme:plan-page` 之前对**每个**请求都注入（只判断 `planPage !== 'off'`），普通回合里白背约 120 token，而且开头写着 "Plan mode:"。
+现在 `text` 回调会取可选的 `planMode` 服务并调 `loggedActive(session)`，**只有激活时**才给文本；
+拿不到服务、没有该方法、或读状态抛错时**照旧注入**（fail-open —— 宁可多一段提示，也不能让计划页在宿主换版本后悄悄失效）。
+
+### 验证
+`npm test` **417 项全绿**：清单 7 / 宿主 **146（+4）** / mermaid 35 / 客户端 87 / 预设 38 / 模板 67 / 页面 37。
+新增 4 条：未激活不注入 / 激活注入且含「展示页：」/ 缺服务与抛错时 fail-open / 无 agent 上下文为空串。
+`npm run assets:refresh` 后 `npm run doctor` 通过（`templates/` 落地副本一致）。
+
 ## 0.3.1 — 2026-11-02
 
 **skill 拆成"索引 + 按需读"：526 行 → 215 行索引 + 五份 references。**
