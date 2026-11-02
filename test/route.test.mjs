@@ -789,6 +789,69 @@ check('过期草稿被顺手清掉（30 天）', () =>
   assert.ok(!afterPrune.includes(`${staleName}.json`), '40 天前的草稿还在'),
 )
 
+console.log('\\n[markdown] 结构型 md 就当场失败，行内不拦')
+
+// 模板页 = 同目录有同名 .data.js。数据里写 md 表格 → 这次调用应该直接失败。
+await writeFile(join(workspace, '.dsh', 'showme', 'md-bad.html'), pageBody, 'utf8')
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'md-bad.data.js'),
+  [
+    'window.SHOWME = {',
+    "  title: 'x',",
+    '  sections: [{',
+    "    heading: 'h',",
+    '    blocks: [',
+    "      { type: 'text', text: '| a | b |\\n|---|---|' },",
+    '    ],',
+    '  }],',
+    '}',
+  ].join('\n'),
+  'utf8',
+)
+const mdBad = await tool.execute({ path: '.dsh/showme/md-bad.html' }, exec).then(
+  () => null,
+  (error) => error,
+)
+check('数据里有 md 表格：这次调用失败', () => {
+  assert.ok(mdBad !== null, 'md 表格没被拦下来')
+  assert.match(mdBad.message, /markdown 结构语法/)
+})
+check('错误里点名该用哪个块', () => assert.match(mdBad.message, /table 块/))
+check('错误里给出逃生阀（plain: true）', () => assert.match(mdBad.message, /plain: true/))
+
+// 加了 plain: true 就跳过结构检查（作者明确要显示原文）。
+await writeFile(join(workspace, '.dsh', 'showme', 'md-plain.html'), pageBody, 'utf8')
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'md-plain.data.js'),
+  [
+    'window.SHOWME = {',
+    "  title: 'x',",
+    '  sections: [{',
+    "    heading: 'h',",
+    '    blocks: [',
+    "      { type: 'text', plain: true, text: '| a | b |\\n|---|---|' },",
+    '    ],',
+    '  }],',
+    '}',
+  ].join('\n'),
+  'utf8',
+)
+const mdPlain = await tool.execute({ path: '.dsh/showme/md-plain.html' }, exec).then(
+  () => null,
+  (error) => error,
+)
+check('加了 plain: true：放行', () => assert.equal(mdPlain, null, String(mdPlain && mdPlain.message)))
+
+// 手写页（没有同名数据文件）不受这条检查影响。
+await writeFile(join(workspace, '.dsh', 'showme', 'md-hand.html'), '<h1>| a | b |</h1>', 'utf8')
+const mdHand = await tool.execute({ path: '.dsh/showme/md-hand.html' }, exec).then(
+  () => null,
+  (error) => error,
+)
+check('手写页（没有数据文件）：不误报', () =>
+  assert.equal(mdHand, null, String(mdHand && mdHand.message)),
+)
+
 server.close()
 
 console.log('\n[路由] 服务缺失时靠工具记录兜底')

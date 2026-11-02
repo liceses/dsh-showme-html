@@ -502,6 +502,51 @@ check('不在卡片里（浏览器直开）：不发 ready、也不发草稿', (
   assert.ok(!standalone.messages.some((message) => message.type === 'dsh-showme-draft'))
 })
 
+console.log('\n[markdown] 行内渲染，结构交给块类型')
+
+// 为什么值得测：数据里的 `**粗**` 以前会原样显示成星号。模板只认四种行内写法，
+// 块级 md 一律不认（那部分由宿主的 show_html 预检报错指路）。
+const mdReport = await run('report', {
+  title: 'markdown 行内',
+  sections: [{
+    heading: 'h',
+    blocks: [
+      { type: 'text', text: '这是**粗体**与`代码`，还有[链接](https://e.com)。' },
+      { type: 'text', text: '第一行\n第二行' },
+      { type: 'text', text: '净增 3 * 2 = 6；a | b；5 > 3' },
+      { type: 'text', text: '**<b>x</b>**' },
+      { type: 'text', text: '[坏](javascript:alert(1))' },
+      { type: 'text', plain: true, text: '**不该变粗**' },
+      { type: 'table', head: ['列'], rows: [['**粗**']] },
+    ],
+  }],
+})
+const mdHtml = mdReport.content.innerHTML
+
+check('**粗体** 渲染成 strong，页面上不再有星号', () => {
+  assert.match(mdHtml, /<strong>粗体<\/strong>/)
+  assert.ok(!mdHtml.includes('**粗体**'), '星号还在')
+})
+check('`代码` 渲染成 code', () => assert.match(mdHtml, /<code>代码<\/code>/))
+check('链接带上 target 与 rel', () =>
+  assert.match(mdHtml, /<a href="https:\/\/e\.com" target="_blank" rel="noopener noreferrer">链接<\/a>/),
+)
+check('换行渲染成 br', () => assert.match(mdHtml, /第一行<br>第二行/))
+check('正文里的单个 * / | / > 不被误伤', () => {
+  assert.match(mdHtml, /净增 3 \* 2 = 6；a \| b；5 &gt; 3/)
+  assert.ok(!/<strong>净增/.test(mdHtml))
+})
+check('强调里夹 HTML 也不会变成节点', () => {
+  assert.match(mdHtml, /<strong>&lt;b&gt;x&lt;\/b&gt;<\/strong>/)
+  assert.ok(!mdHtml.includes('<b>x</b>'), '数据里的 <b> 被当成标签了')
+})
+check('javascript: 链接不渲染成 a', () => {
+  assert.match(mdHtml, /\[坏\]\(javascript:alert\(1\)\)/)
+  assert.ok(!/href="javascript/i.test(mdHtml), '危险 scheme 进了 href')
+})
+check('plain: true 的块保持原文', () => assert.match(mdHtml, /\*\*不该变粗\*\*/))
+check('表格单元格也走行内渲染', () => assert.match(mdHtml, /<td><strong>粗<\/strong><\/td>/))
+
 console.log('\n[皮肤] 节奏与分组（横屏用满宽度、去掉重复分隔线）')
 
 check('soft 皮肤：小节标题不再画出那条下边框', () =>

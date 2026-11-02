@@ -157,6 +157,10 @@ window.SHOWME = {
 `text` / `image` / `table` / `callout` / `timeline` / `kv` / `code` / `chips` / `stat` / `rule`。
 每小节默认带一个轻回执，`sectionReceipt: false` 可关掉。
 
+> **文本字段是纯文本，只有四种行内写法**：`**粗**`、`` `代码` ``、`[文字](https://…)`、换行。
+> 表格 / 列表 / 引用 / 标题 / 围栏代码**必须用块类型**——写成 markdown，`show_html` 会直接失败并告诉你用哪个块。
+> 完整清单以 `templates/README.md` 的同名字段说明为准（不要在这里另存一份）。
+
 #### 套模板时你仍然要做的
 
 - **挑皮肤**——数据里那一行 `skin`（§2）；

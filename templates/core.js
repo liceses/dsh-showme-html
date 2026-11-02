@@ -65,6 +65,47 @@
   }
 
   /**
+   * 行内 markdown：只认**块类型表达不了**的三种写法（强调 / 行内代码 / 链接），外加换行。
+   *
+   * 顺序很关键：**先 esc 再替换**。反过来的话数据里的 `<img onerror=…>` 就成了真节点。
+   * 不支持的一律原样返回（斜体、删除线、图片、脚注、嵌套都不认）——
+   * 宁可少认几种，也不要让正文里的 `*` 和 `|` 被误解析。
+   *
+   * @param value - 来自数据的文本。
+   */
+  function inlineMd(value) {
+    var text = esc(value)
+
+    // 行内代码先摘出来，里面的内容不再参与后面的替换。
+    var codes = []
+    text = text.replace(/`([^`\n]+)`/g, function (_, inner) {
+      codes.push(inner)
+      return '\u0000' + (codes.length - 1) + '\u0000'
+    })
+
+    // 链接：只放行 http(s)、页内锚点、相对路径；其它 scheme 原样留着。
+    text = text.replace(/\[([^\]\n]+)\]\(([^()\s]+)\)/g, function (whole, label, href) {
+      if (!/^(?:https?:\/\/|#|\.{1,2}\/)/i.test(href)) return whole
+      return '<a href="' + href + '" target="_blank" rel="noopener noreferrer">' + label + '</a>'
+    })
+
+    // 强调：两侧 ** 成对、内部不含 *、首尾不是空白才算。
+    text = text.replace(/\*\*([^*\n]+)\*\*/g, function (whole, inner) {
+      if (inner === '' || inner.trim() !== inner) return whole
+      return '<strong>' + inner + '</strong>'
+    })
+
+    // 换行就是换行（文本字段里的 \n 不该被吞）。
+    text = text.replace(/\n/g, '<br>')
+
+    // 把行内代码放回去。
+    text = text.replace(/\u0000(\d+)\u0000/g, function (_, index) {
+      return '<code>' + codes[Number(index)] + '</code>'
+    })
+    return text
+  }
+
+  /**
    * 页面文件名 → 数据文件名（同目录、同名、`.data.js`）。
    *
    * 基准用 `document.baseURI`：页面里若声明了 `<base href>`，真实位置在它身上；
@@ -119,38 +160,38 @@
     if (one === null || typeof one !== 'object') return ''
     switch (one.type) {
       case 'text':
-        return '<p>' + esc(one.text) + '</p>'
+        return '<p>' + (one.plain === true ? esc(one.text) : inlineMd(one.text)) + '</p>'
       case 'image':
         return '<figure class="evidence"><img class="sm-img" src="' + esc(one.src) + '" alt="' + esc(one.alt || '') + '">' +
-          (one.caption ? '<figcaption>' + esc(one.caption) + '</figcaption>' : '') + '</figure>'
+          (one.caption ? '<figcaption>' + inlineMd(one.caption) + '</figcaption>' : '') + '</figure>'
       case 'table':
         return '<table class="table"><thead><tr>' +
-          list(one.head).map(function (cell) { return '<th>' + esc(cell) + '</th>' }).join('') +
+          list(one.head).map(function (cell) { return '<th>' + inlineMd(cell) + '</th>' }).join('') +
           '</tr></thead><tbody>' +
           list(one.rows).map(function (row) {
-            return '<tr>' + list(row).map(function (cell) { return '<td>' + esc(cell) + '</td>' }).join('') + '</tr>'
+            return '<tr>' + list(row).map(function (cell) { return '<td>' + inlineMd(cell) + '</td>' }).join('') + '</tr>'
           }).join('') + '</tbody></table>'
       case 'callout':
         return '<div class="callout' + (one.tone ? ' ' + esc(one.tone) : '') + '">' +
-          (one.label ? '<span class="label">' + esc(one.label) + '</span>' : '') + esc(one.text) + '</div>'
+          (one.label ? '<span class="label">' + esc(one.label) + '</span>' : '') + inlineMd(one.text) + '</div>'
       case 'timeline':
         return '<ol class="timeline">' + list(one.items).map(function (entry) {
-          return '<li>' + (entry.title ? '<b>' + esc(entry.title) + '</b>' : '') + esc(entry.text || '') + '</li>'
+          return '<li>' + (entry.title ? '<b>' + esc(entry.title) + '</b>' : '') + inlineMd(entry.text || '') + '</li>'
         }).join('') + '</ol>'
       case 'kv':
         return '<dl class="kv">' + list(one.pairs).map(function (pair) {
           var cells = list(pair)
-          return '<dt>' + esc(cells[0]) + '</dt><dd>' + esc(cells[1]) + '</dd>'
+          return '<dt>' + esc(cells[0]) + '</dt><dd>' + inlineMd(cells[1]) + '</dd>'
         }).join('') + '</dl>'
       case 'code':
         return '<pre class="code"><code>' + esc(one.text) + '</code></pre>'
       case 'chips':
         return '<div class="chips">' + list(one.items).map(function (chip) {
-          if (typeof chip === 'string') return '<span class="chip">' + esc(chip) + '</span>'
-          return '<span class="chip' + (chip && chip.accent ? ' accent' : '') + '">' + esc(chip && chip.text) + '</span>'
+          if (typeof chip === 'string') return '<span class="chip">' + inlineMd(chip) + '</span>'
+          return '<span class="chip' + (chip && chip.accent ? ' accent' : '') + '">' + inlineMd(chip && chip.text) + '</span>'
         }).join('') + '</div>'
       case 'stat':
-        return '<div class="stat"><b class="num">' + esc(one.num) + '</b><span>' + esc(one.text || '') + '</span></div>'
+        return '<div class="stat"><b class="num">' + esc(one.num) + '</b><span>' + inlineMd(one.text || '') + '</span></div>'
       case 'rule':
         return '<hr class="rule">'
       default:
@@ -193,9 +234,9 @@
     return '<div class="card sm-item" data-item="' + esc(id) + '" data-done="0">' +
       '<div class="sm-head"><span class="sm-id">' + esc(id) + '</span>' +
       (item.title ? '<h3>' + esc(item.title) + '</h3>' : '') + '</div>' +
-      (item.desc ? '<p class="sm-desc">' + esc(item.desc) + '</p>' : '') +
+      (item.desc ? '<p class="sm-desc">' + inlineMd(item.desc) + '</p>' : '') +
       '<figure class="evidence"><img class="sm-img" src="' + esc(item.image) + '" alt="' + esc(item.title || '') + '">' +
-      (item.caption ? '<figcaption>' + esc(item.caption) + '</figcaption>' : '') + '</figure>' +
+      (item.caption ? '<figcaption>' + inlineMd(item.caption) + '</figcaption>' : '') + '</figure>' +
       '<div class="sm-ctl">' + controlHtml(id, words, mode) + '</div>' +
       '</div>'
   }
@@ -210,7 +251,7 @@
     return '<div class="sm-line" data-item="' + esc(id) + '" data-done="0">' +
       '<div class="sm-lineMain"><div class="sm-head"><span class="sm-id">' + esc(id) + '</span>' +
       (item.title ? '<h3>' + esc(item.title) + '</h3>' : '') + '</div>' +
-      (item.desc ? '<p class="sm-desc">' + esc(item.desc) + '</p>' : '') + '</div>' +
+      (item.desc ? '<p class="sm-desc">' + inlineMd(item.desc) + '</p>' : '') + '</div>' +
       '<div class="sm-ctl">' + controlHtml(id, words, mode) + '</div>' +
       '</div>'
   }
@@ -249,7 +290,7 @@
   function renderReview(data) {
     var html = ''
     list(data.sections).forEach(function (sec) {
-      var body = sec.intro ? '<p>' + esc(sec.intro) + '</p>' : ''
+      var body = sec.intro ? '<p>' + inlineMd(sec.intro) + '</p>' : ''
       var items = list(sec.items)
       if (items.length > 0) body += itemsHtml(items, verdicts, '', sec.two)
       body += list(sec.blocks).map(block).join('')
@@ -274,7 +315,7 @@
   function renderReport(data) {
     var html = ''
     list(data.sections).forEach(function (sec) {
-      var body = sec.intro ? '<p>' + esc(sec.intro) + '</p>' : ''
+      var body = sec.intro ? '<p>' + inlineMd(sec.intro) + '</p>' : ''
       body += list(sec.blocks).map(block).join('')
       if (sec.sectionReceipt !== false && sec.heading) {
         var id = String(sec.id || ('sec-' + String(sec.heading).slice(0, 20)))
@@ -688,7 +729,7 @@
       '<div class="mastheadMain">' +
       (data.kicker ? '<div class="kicker">' + esc(data.kicker) + '</div>' : '') +
       '<h1>' + esc(data.title || '（数据里缺 title）') + '</h1>' +
-      (data.lead ? '<p class="lead">' + esc(data.lead) + '</p>' : '') +
+      (data.lead ? '<p class="lead">' + inlineMd(data.lead) + '</p>' : '') +
       '</div>' +
       (list(data.meta).length > 0
         ? '<div class="meta">' + list(data.meta).map(function (one) { return '<span>' + esc(one) + '</span>' }).join('') + '</div>'

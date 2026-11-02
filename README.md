@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.2.7-blue.svg)
+![Version](https://img.shields.io/badge/version-0.2.8-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -302,6 +302,8 @@ pie / radar / treemap / wardley / cynefin / info / railroad / treeview / eventmo
 skill 用文字规定"回执怎么做"，模型每次都重新实现一遍，于是**控件位置、组句、通道时机反复出错**。
 模板把"实现"变成"填数据"。
 
+文本字段只认四种行内写法（`**粗**`、`` `代码` ``、`[文字](https://…)`、换行）；表格、列表、引用、标题、围栏代码**必须用块类型**——数据里写成 markdown 的话，`show_html` 会当场失败并告诉你该用哪个块，而不是把星号和竖线原样显示给用户。要原样展示一段 markdown 时，给那个 `text` 块加 `plain: true`。
+
 宿主在你第一次展示页面时把骨架落到 `.dsh/showme/templates/`（create-only）：
 
 | 骨架 | 形状 | 什么时候用 |
@@ -586,8 +588,8 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 377 项离线断言：清单 7 / 宿主 128 / mermaid 35 / 客户端 79 / 预设 38 / 模板 53 / 页面 37
-                        # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 378）
+npm test                # 391 项离线断言：清单 7 / 宿主 133 / mermaid 35 / 客户端 79 / 预设 38 / 模板 62 / 页面 37
+                        # （Windows 上建不出软链接时少 1 条——"软链接逃逸 403"会自动跳过，总数 392）
 
 npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区** / 落地副本
 
