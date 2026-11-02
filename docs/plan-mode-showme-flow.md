@@ -16,6 +16,10 @@
 | `Sidebar` | `lib/client.js:283-291` | 页类型 `multiple: true`（**允许同页多 tab**） |
 | `Prefs` | `lib/index.js:86` / `lib/client.js:460` | 三个开关，用户级落盘 |
 
+> 渲染后的页面：`.dsh/showme/plan-mode-uml.html`（5 张 mermaid 图 + 缺陷表）；下面三张是它的截图。
+
+![状态机](screenshots/plan-mode-uml-state.jpg)
+
 ## 1. 现状状态机（页面 tab 的生命周期）
 
 ```mermaid
@@ -37,6 +41,8 @@ stateDiagram-v2
 三个状态转移看着"都能用"，但合起来是：**同一页最多会被开 3 次**（卡片、评审、要求修改后再评审），而"该开一次却没开"的两种路径都**不会自愈**。
 
 ## 2. 现状时序：默认开关下，同一个计划页被开两次
+
+![双开时序](screenshots/plan-mode-uml-double-open.jpg)
 
 ```mermaid
 sequenceDiagram
@@ -90,6 +96,8 @@ sequenceDiagram
 顺序假设（先写页、后评审）在提示词里没有强制，模型完全可能反过来。
 
 ## 4. 现状决策图：什么时候会开
+
+![决策图](screenshots/plan-mode-uml-decision.jpg)
 
 ```mermaid
 flowchart TD
