@@ -602,6 +602,28 @@ check('已表态的条目描述降权（减弱占用的注意力）', () =>
   assert.match(source, /data-done="1"\] \.sm-desc\{opacity/, '没有「已完成」的降权样式'),
 )
 
+console.log('\n[散文兜底] 长描述折不塌行')
+
+// 控件贴第一行：行是网格，垂直居中会让按钮飘到段落中间（用户截图里的症状）。
+check('行内控件贴顶对齐，不再垂直居中', () => {
+  assert.match(source, /\.sm-line\{display:grid;grid-template-columns:minmax\(0,1fr\) 296px;gap:18px;align-items:start/, '.sm-line 还是 center 对齐')
+})
+check('长描述默认折三行、带展开按钮样式', () => {
+  assert.match(source, /\.sm-desc\.sm-clamped\{display:-webkit-box;-webkit-line-clamp:3/, '没有三行折行规则')
+  assert.match(source, /\.sm-more\{cursor:pointer/, '没有「展开」按钮样式')
+})
+check('只有长于 90 字才折行、才渲染展开', () => {
+  assert.match(source, /String\(item\.desc\)\.length > 90 \? ' sm-clamped'/, '折行条件不是按长度')
+  assert.match(source, /length > 90 \? '<button class="sm-more"/, '展开按钮没有按长度门控')
+})
+check('「展开」只改展示，不碰回执状态', () => {
+  const at = source.indexOf("className.indexOf('sm-more')")
+  assert.ok(at !== -1, '没有「展开」的处理分支')
+  const body = source.slice(at, at + 400)
+  assert.ok(!/toggle\(/.test(body), '「展开」调用了 toggle')
+  assert.ok(!/state\[/.test(body), '「展开」动到了回执状态')
+  assert.match(body, /classList\.remove\('sm-clamped'\)/, '「展开」没有去掉折行')
+})
 console.log('\n[约束] 沙箱里不能用的东西')
 
 // 必须剥掉注释再查：头注释里写着"不依赖 localStorage"，否则匹配到的是自己的文档。

@@ -1086,6 +1086,106 @@ const imgOk = await tool.execute({ path: '.dsh/showme/img-ok.html' }, exec).then
 )
 check('图存在：放行', () => assert.equal(imgOk, null, String(imgOk && imgOk.message)))
 
+console.log('\\n[散文条目] 长段落塞进条目位就当场失败')
+
+// 判据三条：desc 超 240 字 / 含空行 / 含列表或表格行。这里逐个走一遍。
+const longDesc = '`db/schema/30-demo.sql:39-42` 的 `ck_demos_erased` 只校验 title、description、cover_url，漏了 guest_name；`122-128` 的 `ck_rev_erased_content` 校验十二列，漏了 single_file 和 external_url。'.repeat(2)
+await writeFile(join(workspace, '.dsh', 'showme', 'prose-bad.html'), pageBody, 'utf8')
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'prose-bad.data.js'),
+  `window.SHOWME = { title: 'x', sections: [{ heading: 'h', items: [{ id: 'p0-3', title: '擦除约束', desc: ${JSON.stringify(longDesc)} }] }] }\n`,
+  'utf8',
+)
+const proseBad = await tool.execute({ path: '.dsh/showme/prose-bad.html' }, exec).then(
+  () => null,
+  (error) => error,
+)
+check('desc 超长：调用失败并点名 id', () => {
+  assert.ok(proseBad !== null, '长段落没被拦下来')
+  assert.match(proseBad.message, /长段落写进了条目位/)
+  assert.match(proseBad.message, /p0-3/)
+  assert.match(proseBad.message, /上限 240/)
+})
+check('错误里给出该搬去哪个块', () => {
+  assert.match(proseBad.message, /callout/)
+  assert.match(proseBad.message, /kv/)
+  assert.match(proseBad.message, /table/)
+})
+check('错误里给出逃生阀（plain: true）', () => assert.match(proseBad.message, /plain: true/))
+
+// 空行分段：两段合成一条，也是"条目冒充文档"。
+await writeFile(join(workspace, '.dsh', 'showme', 'prose-blank.html'), pageBody, 'utf8')
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'prose-blank.data.js'),
+  "window.SHOWME = { title: 'x', candidates: [{ id: 'a', title: 'A', desc: '第一段。' + String.fromCharCode(10).repeat(3) + '第二段。' }] }",
+  'utf8',
+)
+const proseBlank = await tool.execute({ path: '.dsh/showme/prose-blank.html' }, exec).then(
+  () => null,
+  (error) => error,
+)
+check('desc 里有空行分段：调用失败', () => {
+  assert.ok(proseBlank !== null, '空行分段没被拦下来')
+  assert.match(proseBlank.message, /空行分段/)
+})
+
+// 列表行：条目里在写结构。
+await writeFile(join(workspace, '.dsh', 'showme', 'prose-list.html'), pageBody, 'utf8')
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'prose-list.data.js'),
+  "window.SHOWME = { title: 'x', candidates: [{ id: 'a', title: 'A', desc: '要做三件事：' + String.fromCharCode(10) + '- 写迁移' + String.fromCharCode(10) + '- 补文档' }] }",
+  'utf8',
+)
+const proseList = await tool.execute({ path: '.dsh/showme/prose-list.html' }, exec).then(
+  () => null,
+  (error) => error,
+)
+check('desc 里有列表行：调用失败', () => {
+  assert.ok(proseList !== null, '列表行没被拦下来')
+  assert.match(proseList.message, /列表行/)
+})
+
+// 一句话：正常放行（这条同时守住"别把正常页拦掉"）。
+await writeFile(join(workspace, '.dsh', 'showme', 'prose-ok.html'), pageBody, 'utf8')
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'prose-ok.data.js'),
+  "window.SHOWME = { title: 'x', sections: [{ heading: 'h', items: [{ id: 'p0-3', title: '擦除约束', desc: '两条擦除约束各漏了列，写了迁移也不等于擦干净。' }] }] }\\n",
+  'utf8',
+)
+const proseOk = await tool.execute({ path: '.dsh/showme/prose-ok.html' }, exec).then(
+  () => null,
+  (error) => error,
+)
+check('一句话的条目：放行', () => assert.equal(proseOk, null, String(proseOk && proseOk.message)))
+
+// 逃生阀：作者明确说这份数据要长文。
+await writeFile(join(workspace, '.dsh', 'showme', 'prose-plain.html'), pageBody, 'utf8')
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'prose-plain.data.js'),
+  `window.SHOWME = { title: 'x', plain: true, sections: [{ heading: 'h', items: [{ id: 'p0-3', title: 'T', desc: ${JSON.stringify(longDesc)} }] }] }\n`,
+  'utf8',
+)
+const prosePlain = await tool.execute({ path: '.dsh/showme/prose-plain.html' }, exec).then(
+  () => null,
+  (error) => error,
+)
+check('加了 plain: true：跳过散文检查', () => assert.equal(prosePlain, null, String(prosePlain && prosePlain.message)))
+
+// 数据文件里是**代码**而不是纯数据（vm 里跑不起来）：fail-open，不拦。
+await writeFile(join(workspace, '.dsh', 'showme', 'prose-dyn.html'), pageBody, 'utf8')
+await writeFile(
+  join(workspace, '.dsh', 'showme', 'prose-dyn.data.js'),
+  "window.SHOWME = { title: 'x', sections: [{ heading: 'h', items: (() => { null.x })() }] }\n",
+  'utf8',
+)
+const proseDyn = await tool.execute({ path: '.dsh/showme/prose-dyn.html' }, exec).then(
+  () => null,
+  (error) => error,
+)
+check('数据文件在 vm 里跑不通：fail-open 放行', () => {
+  assert.ok(proseDyn === null || !/长段落写进了条目位/.test(proseDyn.message), String(proseDyn && proseDyn.message))
+})
+
 server.close()
 
 console.log('\n[路由] 服务缺失时靠工具记录兜底')

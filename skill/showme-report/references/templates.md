@@ -63,12 +63,71 @@ window.SHOWME = { title:'…', sections:[{ heading:'…', blocks:[ { type:'text'
 | `stat` | `num` | `text?`；一排数字 |
 | `rule` | — | 分隔线 |
 
+## 写坏了的条目长什么样
+
+条目位（`items[]` / `candidates[]`）在模板里是**一行**：左边一句话，右边控件。
+把一段话灌进去，行会被撑成整段高，控件就飘到段落中间。宿主现在会拦（见「报错 → 怎么改」），
+但更重要的是写的时候就别这么写。
+
+**判据**：`desc` 超过约 240 字、里面有空行、有列表行或表格行 —— 任一条命中就是写错了位置。
+
+### 反例 1 · 证据塞进一句话
+
+```js
+// ✗ 一条 desc 里塞了三个行号、两处疏漏、两个方案
+{ id: 'p0-3', title: '擦除约束漏了三列',
+  desc: '`db/schema/30-demo.sql:39-42` 的 `ck_demos_erased` 只校验 title / description / cover_url，**漏了 guest_name**。' +
+        '`122-128` 的 `ck_rev_erased_content` 校验十二列，**漏了 single_file 和 external_url**。**A**：写迁移 0014。**B**：只登记。' }
+
+// ✓ 条目只留结论，证据进块
+{ id: 'p0-3', title: '两条擦除约束各漏了列',
+  desc: '写了迁移也不等于擦干净 —— 旧数据仍有残留。' }
+// 同一节的 blocks 里：
+{ type: 'kv', pairs: [['ck_demos_erased', '30-demo.sql:39-42 只校验 5 列，漏 guest_name'],
+                      ['ck_rev_erased_content', '30-demo.sql:122-128 校验 12 列，漏 single_file / external_url']] }
+```
+
+### 反例 2 · 条目里分行分段
+
+```js
+// ✗ 空行 + 多段 = 它在冒充文档
+{ id: 'p0-4', desc: '`accounts.role` 没有外键。\n\n全库只有一处 REFERENCES roles，是 role_permissions。\n\n**A**：补迁移。**B**：改文档。' }
+
+// ✓ 一页只讲一件事时，整页换 doc 形状；要表态就一句话
+{ id: 'p0-4', title: 'accounts.role 没有外键', desc: '写进 role 的值可以根本不在 roles 表里。' }
+```
+
+### 反例 3 · 用条目位排一个对照表
+
+```js
+// ✗ 竖线表格塞进 desc
+{ id: 'p0-5', desc: '| 方案 | 成本 |\n|---|---|\n| A | 高 |\n| B | 低 |' }
+
+// ✓ 用 table 块
+{ type: 'table', head: ['方案', '成本'], rows: [['A', '高'], ['B', '低']] }
+```
+
+### 一段话 → 该搬到哪个块
+
+| 这一段是 | 搬到 |
+|---|---|
+| 为什么这么说 / 背景 / 结论的语气 | `callout`（`tone: 'good' \| 'warn' \| 'bad'`） |
+| 路径、字段名、数字、版本、配置项 | `kv`（`pairs[[k, v]]`） |
+| 多列对照、逐项数值 | `table`（`head` + `rows`） |
+| 一段不需要表态的叙述 | `text`，或整页换 `doc` 形状 |
+| 步骤 | `timeline` |
+| 原始代码 / 日志 | `code` |
+
+**如果这份数据确实要长文**（例如整段搬来的报告）：给数据加 `plain: true`，宿主的散文检查会跳过。
+但那是逃生阀，不是默认写法 —— 页面上依然会很难看。
+
 ## 报错 → 怎么改
 
 | 报错里出现 | 意思 | 改法 |
 |---|---|---|
 | `没找到数据文件：xxx.data.js` | 数据文件没和页面同名（或那一页在原生文档预览的 blob 里） | 改名成同名；或改静态引入（见 `sandbox.md`） |
 | `数据文件里写了 markdown 结构` | 表格/列表/引用/标题/围栏被写进了文本字段 | 换成对应块类型；确实要原样显示就 `plain: true` |
+| `把长段落写进了条目位` | 条目 `desc` 太长（>240 字）或自带空行/列表/表格 | 一句话留在条目里，其余搬到 `callout` / `kv` / `table` / `text`（见上一节） |
 | `缺图：…` | `image` / `src` 指向的本地文件不存在 | 先真的把图放进去，或删掉这个字段 |
 | `mermaid … Parse error` | 图写错了 | 见 `mermaid.md` |
 | 页面空白 | 数据里没有 `window.SHOWME`，或 JS 语法错 | 先 `node --check` 那个 `.data.js` |

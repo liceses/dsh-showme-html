@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.4.1-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -309,6 +309,11 @@ skill 用文字规定"回执怎么做"，模型每次都重新实现一遍，于
 只有阅读与「复制全文」）—— 选哪一份看"用户看完要不要表态"。
 
 文本字段只认四种行内写法（`**粗**`、`` `代码` ``、`[文字](https://…)`、换行）；表格、列表、引用、标题、围栏代码**必须用块类型**——数据里写成 markdown 的话，`show_html` 会当场失败并告诉你该用哪个块，而不是把星号和竖线原样显示给用户。要原样展示一段 markdown 时，给那个 `text` 块加 `plain: true`。
+
+**条目位只放一句话。** 条目（`items[]` / `candidates[]`）在页面上是**一行**：左边一句话、右边控件。
+把一整段证据灌进去，行会被撑成段落高，控件就飘到段落中间——所以 `desc` 超过 240 字、含空行分段、
+含列表行或表格行时，`show_html` 同样**当场失败**，并点名这条该搬到 `callout` / `kv` / `table` / `text`（或整页换 `doc`）。
+确实要长文就给数据加 `plain: true`。另外模板会兜底：`desc` 长于 90 字时折三行并给一个「展开」，行内控件永远贴第一行。
 
 宿主在你第一次展示页面时把骨架落到 `.dsh/showme/templates/`（create-only）：
 
@@ -625,6 +630,8 @@ DSH 自己的错误行（`turn-error`）用的就是同一招。工具行留着�
 - **不做范围请求**：大视频文件会整个读进内存再发。
 - **不做文件监听**：改完文件要按卡片上的「刷新」（自动刷新属于后续里程碑）。
 - **页面在卡片里能力受限**：见上表；需要 `localStorage` / 表单 / 下载时请用「浏览器打开」。
+- **散文检查看的是"长度与形状"，不是"写得好不好"**：`desc` 一句话但 240 字以内一律放行；
+  反过来，一段写得很紧凑的长文也会被拦（那是故意的——它该进块）。逃生阀是数据里的 `plain: true`。
 - **不支持 `file://` 链接**：浏览器禁止从 http 页面跳到 `file://`，所以「在浏览器打开」走 HTTP 路由。
 - 单页上限 8 MiB；反馈正文上限 256 KiB。
 - **`ctx.get('sessions')` / `ctx.get('sessionQuery')` 在路由所在的插件上下文里取不到**
@@ -678,7 +685,7 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 445 项离线断言：清单 7 / 宿主 159 / mermaid 35 / 客户端 102 / 预设 38 / 模板 67 / 页面 37
+npm test                # 457 项离线断言：清单 7 / 宿主 167 / mermaid 35 / 客户端 102 / 预设 38 / 模板 71 / 页面 37
                         # （Windows 上建不出软链接时，宿主那组会多打一行 skip，**不计入** 159）
 
 npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区** / 落地副本

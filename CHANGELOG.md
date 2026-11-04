@@ -1,5 +1,34 @@
 # 变更记录
 
+## 0.4.1 — 2026-11-04
+
+**条目位只放一句话：写成长段落，`show_html` 当场失败。**
+
+起因是用户贴出的一页：四条互不相干的审计结论排成 2×2，每条的正文是一整段带 `**粗体**`、
+反引号路径、多行缩进的 markdown，判定按钮被挤到段落中间、id 掉到控件下面。用户问
+「容易写出这样的 showme page 怎么办呢」。诊断下来这不是审美问题，是**结构错位**：
+条目在模板里是**一行**（`minmax(0,1fr) 296px` 的网格，左边一句话、右边控件），
+一段 300 字灌进左边，行就变成 300 字高，控件按 `align-items:center` 垂直居中——
+于是「按钮飘在段落中间」。
+
+四个杠杆（用户逐条点头，全部落地）：
+
+- **宿主预检（主）**：`lib/index.js` 新增 `readTemplateData()` / `findProseItems()` / `formatProseErrors()`。
+  只认条目位（`sections[].items[]` 与 `candidates[]`；`blocks` 里的 text / callout 本就该放长文，
+  `doc` 形状没有条目位），判据三条：`desc` 超过 **240 字**、含**两个以上空行**、含**列表行 / 表格行**。
+  命中就让这次调用失败，错误里点名 id、说他该搬到 `callout` / `kv` / `table` / `text`，
+  并给出逃生阀 `plain: true`（与结构 markdown 检查同一个）。顺序排在 mermaid 预检之后、
+  结构 markdown 之前。数据文件用 `node:vm` 跑一份 stub `window` 取值（1 秒超时、无 require/fetch/process），
+  跑不通就 **fail-open**——动态拼出来的数据在 vm 里本来就跑不通，宁可不查也不误伤。
+- **模板兜底**：`templates/core.js` 的 `.sm-line` 从 `align-items:center` 改成 `start`（控件永远贴第一行）；
+  `.sm-desc` 长于 **90 字**时折三行（`-webkit-line-clamp:3`）并给一个「展开」按钮。
+  按钮只动展示，不碰回执状态——折叠与否不影响判定与备注。
+- **文档**：`references/templates.md` 新增「写坏了的条目长什么样」：三组改前/改后（证据塞进一句话 /
+  条目里分行分段 / 用条目位排表格）+ 一张「这一段该搬到哪个块」对照表；报错表补一行。
+  `skill/showme-report/SKILL.md` §1.1 表前加**三行形状选择**（逐项表态 → review；挑 → pick；
+  讲清楚一件事 → doc；多小节各一块 → report），点名「四份独立发现被压成一排条目」这个典型症状。
+- 断言 **445 → 457**（宿主 159 → 167，模板 67 → 71）；README 补「条目位只放一句话」与一条已知限制。
+
 ## 0.4.0 — 2026-11-04
 
 **Showme Often 从一个 agent 预设，改成插件内的一个开关（提示词注入）。**

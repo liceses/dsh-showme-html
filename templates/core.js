@@ -238,7 +238,10 @@
     return '<div class="card sm-item" data-item="' + esc(id) + '" data-done="0">' +
       '<div class="sm-head"><span class="sm-id">' + esc(id) + '</span>' +
       (item.title ? '<h3>' + esc(item.title) + '</h3>' : '') + '</div>' +
-      (item.desc ? '<p class="sm-desc">' + inlineMd(item.desc) + '</p>' : '') +
+      (item.desc
+        ? '<p class="sm-desc' + (String(item.desc).length > 90 ? ' sm-clamped' : '') + '" data-desc="' + esc(id) + '">' + inlineMd(item.desc) + '</p>' +
+          (String(item.desc).length > 90 ? '<button class="sm-more" type="button" data-more="' + esc(id) + '">展开</button>' : '')
+        : '') +
       '<figure class="evidence"><img class="sm-img" src="' + esc(item.image) + '" alt="' + esc(item.title || '') + '">' +
       (item.caption ? '<figcaption>' + inlineMd(item.caption) + '</figcaption>' : '') + '</figure>' +
       '<div class="sm-ctl">' + controlHtml(id, words, mode) + '</div>' +
@@ -255,7 +258,10 @@
     return '<div class="sm-line" data-item="' + esc(id) + '" data-done="0">' +
       '<div class="sm-lineMain"><div class="sm-head"><span class="sm-id">' + esc(id) + '</span>' +
       (item.title ? '<h3>' + esc(item.title) + '</h3>' : '') + '</div>' +
-      (item.desc ? '<p class="sm-desc">' + inlineMd(item.desc) + '</p>' : '') + '</div>' +
+      (item.desc
+        ? '<p class="sm-desc' + (String(item.desc).length > 90 ? ' sm-clamped' : '') + '" data-desc="' + esc(id) + '">' + inlineMd(item.desc) + '</p>' +
+          (String(item.desc).length > 90 ? '<button class="sm-more" type="button" data-more="' + esc(id) + '">展开</button>' : '')
+        : '') + '</div>' +
       '<div class="sm-ctl">' + controlHtml(id, words, mode) + '</div>' +
       '</div>'
   }
@@ -662,6 +668,15 @@
       var target = event.target
       if (!target || !target.getAttribute || !target.className) return
       if (target.id === 'sm-draft-clear') { clearDraft(); return }
+      if (target.className.indexOf('sm-more') !== -1) {
+        var row = target.parentNode
+        if (row && row.querySelector) {
+          var desc = row.querySelector('.sm-desc')
+          if (desc) desc.classList.remove('sm-clamped')
+        }
+        if (row && row.removeChild) row.removeChild(target)
+        return
+      }
       if (target.className.indexOf('sm-btn') === -1) return
       var id = target.getAttribute('data-id')
       var word = target.getAttribute('data-w')
@@ -711,6 +726,10 @@
     '.sm-head h3{margin:0}',
     '.sm-id{font-family:var(--mono,monospace);font-size:var(--f-xs,12px);letter-spacing:.06em;color:var(--accent,#3b82f6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34ch}',
     '.sm-desc{margin:0;font-size:var(--f-sm,13.5px);color:var(--ink-2,#4b5563)}',
+    // 长描述先折三行（兜底：条目位装不下一段话，别让行塌成整段高）
+    '.sm-desc.sm-clamped{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}',
+    '.sm-more{cursor:pointer;align-self:start;justify-self:start;margin-top:2px;padding:2px 0;border:0;background:none;font:500 var(--f-xs,12px)/1 var(--font,sans-serif);color:var(--accent,#3b82f6)}',
+    '.sm-more:hover{text-decoration:underline}',
     '.sm-item[data-done="1"] .sm-id::after,.sm-line[data-done="1"] .sm-id::after{content:" ✓"}',
     '.sm-item[data-done="1"] .sm-desc{opacity:.72}',
 
@@ -733,7 +752,7 @@
     '.sm-list-solo .sm-line{grid-template-columns:auto minmax(0,1fr);align-items:center;padding:10px 16px}',
     '.sm-list-solo .sm-ctl{grid-auto-flow:column;justify-content:end;align-items:center;gap:10px}',
     '.sm-list-solo .sm-note{width:240px}',
-    '.sm-line{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:18px;align-items:center;padding:12px 16px}',
+    '.sm-line{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:18px;align-items:start;padding:12px 16px}',
     '.sm-line .sm-ctl{margin-top:0}',
     '.sm-line + .sm-line{border-top:1px solid var(--line,#e5e7eb)}',
     '.sm-line:hover{background:var(--surface-2,#f4f4f4)}',
