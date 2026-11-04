@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.3.5-blue.svg)
+![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -117,7 +117,7 @@ npm run doctor          # 一体检：资产 / skill 投递 / profile 装配 / �
 | 页面里的脚本能干什么 | [安全模型](#security) |
 | 卡片为什么不会被折叠 | [卡片在哪一行](#chat-row) |
 | 自动开右栏 / 计划页怎么设 | [设置（在插件页里）](#settings) · [计划页](#plan-page) |
-| 想让回答默认是一页 | [预设：Showme Often](#preset-showme-often) |
+| 想让回答默认是一页 | [回答形态：Showme Often](#page-policy) |
 | 刷新会不会丢我填的东西 | [刷新 / 切会话不丢](#draft) |
 | 有什么坑 | [已知限制](#limits) |
 | 想改代码 | [仓库结构](#layout) · [开发](#dev) |
@@ -466,12 +466,13 @@ templates/core.js        内核：渲染与交互全在这里，四份骨架共�
 ## 设置：展示页
 
 **插件页 → `dsh-showme-html` → 「展示页 · 设置」**（插件注册在 `plugins.detail.section` 槽里，
-只在自己那条组合包的详情页出现，别人的插件页不会有这块）。三个开关，存**用户级**偏好
+只在**自己那条组合包**的详情页出现，别人的插件页不会有这块）。四个开关，存**用户级**偏好
 `<DSH_HOME>/showme/prefs.json` —— 换工作区不用重设，因为这是这个人的展示习惯。
 
 | 设置 | 默认 | 作用 |
 |---|---|---|
 | `show_html` 之后自动在右栏打开 | 开 | 每轮只开**最后一张**（1.2s 防抖）；每个页面只自动开一次，**你手动关掉后不再抢**；窗口窄于 1200px 时不自动开 |
+| Showme Often（回答默认是一页） | `off` | `off` 不注入任何提示 / `prefer` 有结构可看就出页 / `always` 每条实质回答都是一页（见[回答形态](#page-policy)） |
 | 计划页 | `offer` | `off` 只写 markdown / `offer` 复杂计划额外产一页 / `require` 一律产页（markdown 只留摘要） |
 | 计划评审出现时自动打开计划页 | 开 | 只对 markdown 里写了「展示页：<路径>」的那次评审生效 |
 
@@ -503,25 +504,28 @@ templates/core.js        内核：渲染与交互全在这里，四份骨架共�
 
 ---
 
-<a id="preset-showme-often"></a>
-## 预设：Showme Often（让回答默认是一页）
+<a id="page-policy"></a>
+## 回答形态：Showme Often（让回答默认是一页）
 
-插件的工具与计划页解决的是「能不能展示」；**回答形态**由会话预设决定。仓库里的
-[`preset/showme-often/`](<preset/showme-often/README.md>) 是一个独立的 agent 预设 bundle：
-选中它的会话，**默认用展示页回答**，聊天正文只留摘要与要做决定的事。
+工具与计划页解决的是「能不能展示」；**回答的默认形状**是另一回事。0.4.0 起它不再是一个
+agent 预设，而是插件里的一个开关：**系统提示里多注入一段「默认做页」的规则**，其余一切不变。
 
-- **只改一处**：`persona` 前缀里写死了「默认做页」的规则（多条目 / 对比 / 表格 / 流程 / 截图 /
-  待评审 / 可点名 → 一律做页；只有一两句话且无可指的东西才用纯文字；拿不准就做页），
-  并明确压过 `show_html` 工具描述里那句「不要用于普通回答」。
-- **能力不缩水**：插件清单逐字照抄 DSH 自带的 `standard` 预设，页面之外的工具一个不少；
-  **不重复挂本插件**（它是宿主级工具，再挂会撞出两个同名 `show_html`）。
-- **装**：`plugin_manager action=install_bundle target=<仓库>/preset/showme-often`。装完
-  `list_plugins` / 设置里的预设名册多一条 `preset-showme-often`。
-- **选**：新会话的选择器里选它；或 设置 → 预设 → 设为默认。既有会话换不了（DSH 的规则）。
-- **升级 DSH 后**：从新版 `@deepseek-ai/dsh-web-app/presets/standard.patch.yml` 重抄插件清单，
-  只保留本预设的 `persona` 前缀；`complete` 必须保持 `false`（否则顶掉运行时上下文与 `AGENTS.md`）。
-
-这个目录**不进 npm 包**（`files` 里没有 `preset/`），装 `link:` 也不会带上它。
+- **三档**（插件页 →「展示页 · 设置」→ Showme Often，存 `prefs.json` 的 `pagePolicy`）：
+  `off`（默认，完全不注入）/ `prefer`（有结构可看就出页）/ `always`（每条实质回答都是一页，
+  正文不超过五行）。
+- **注入的不是命令式约束**：它明说 `show_html` 工具描述里那句「不要用于普通回答」在这里被
+  「一页就是普通回答」取代，给出一张**触发清单**（多条目 / 对比 / 表格 / 时间线 / 流程 /
+  截图 / 待逐项批准 / 可点名），并给出两个纯文字的例外（短对话、明确要文字或代码），
+  最后一句是「拿不准就做页」—— 页也能只装一句话。
+- **为什么不做成预设**：DSH 的预设只认内置的四个 id，第三方插件的发布门往往是
+  `modeOf(agent) === mode`（`dsh-ops` 0.4.x 就是如此）。自定义预设一选，`ops_bash` 与整套
+  文件工具都会消失，得等 `dsh-ops` 0.5 的 `integration` 显式 opt-in 才能补回来。
+  写成提示注入则**不碰预设**：会话仍是 `standard`，工具面一个不少。
+- **位置**：`showme:page-policy` 段，order = `DEPLOYMENT_PERSONA_PREFIX + 50`，紧跟 persona、
+  早于计划策略（500），所以它压得住工具描述里的默认语气，又不会盖掉计划页规则。
+  `planPage` 那一档仍在 `showme:plan-page` 里，两者互不影响。
+- **立刻生效**：偏好改完下一轮就按新档位注入（30s 缓存），**不用重启**；换档要重载的是
+  提示文本，不是代码。
 
 ---
 
@@ -663,7 +667,6 @@ skill/showme-report/  产品核心：SKILL.md（索引，215 行）+ references/
 examples/             示例页源码（页面冒烟测试的夹具；mermaid-demo / mermaid-types 是截图的原件）
 test/                 离线验收：清单 / 宿主 / mermaid / 客户端 / 预设 / 模板 / 页面 七组
 tools/                维护脚本：vendor:mermaid · assets:refresh · asar:list · asar:scan
-preset/showme-often/  会话预设 bundle：让回答默认是一页（独立安装，不进 npm 包）
 docs/                 需求演进与定稿方案
 ```
 
@@ -675,8 +678,8 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 437 项离线断言：清单 7 / 宿主 153 / mermaid 35 / 客户端 100 / 预设 38 / 模板 67 / 页面 37
-                        # （Windows 上建不出软链接时，宿主那组会多打一行 skip，**不计入** 153；能建软链接的机器是 154 / 432）
+npm test                # 445 项离线断言：清单 7 / 宿主 159 / mermaid 35 / 客户端 102 / 预设 38 / 模板 67 / 页面 37
+                        # （Windows 上建不出软链接时，宿主那组会多打一行 skip，**不计入** 159）
 
 npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区** / 落地副本
 

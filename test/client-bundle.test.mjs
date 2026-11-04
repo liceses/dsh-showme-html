@@ -1179,9 +1179,14 @@ check('偏好：读走 GET /api/showme/prefs', async () => {
 })
 check('偏好：写走 POST，提交的是改动的那几项', async () => {
   await internals.savePrefs({ planPage: 'require' })
-  const call = fetchCalls.filter((entry) => entry.url === '/api/showme/prefs' && entry.options?.method === 'POST').pop()
-  assert.ok(call !== undefined, '没有发写请求')
-  assert.deepEqual(JSON.parse(call.options.body), { planPage: 'require' })
+  const calls = fetchCalls.filter(
+    (entry) =>
+      entry.url === '/api/showme/prefs' &&
+      entry.options?.method === 'POST' &&
+      String(entry.options.body).includes('planPage'),
+  )
+  assert.equal(calls.length, 1, '应当是唯一一条只带 planPage 的写请求')
+  assert.deepEqual(JSON.parse(calls[0].options.body), { planPage: 'require' })
 })
 
 check('设置进了插件页：只认自己那条组合包，别人的页返回 null', () => {
@@ -1288,6 +1293,31 @@ check('设置页：拿不到偏好时给一句"读取偏好…"，不白屏', ()
   const node = internals.ShowmeSettings({})
   assert.ok(node !== null, '设置页返回了 null')
   assert.match(JSON.stringify(node), /读取偏好/)
+})
+
+check('设置页：Showme Often 是三档下拉（off / prefer / always），默认 off', () => {
+  // 控件组是读取偏好之后再决定的，静态看源码里的三档与默认值即可。
+  const flat = code.replace(/\s+/g, ' ')
+  for (const mode of ['off', 'prefer', 'always']) {
+    assert.ok(flat.includes(`value: '${mode}'`), `缺少 ${mode} 这一档`)
+  }
+  assert.ok(flat.includes('pagePolicy'), '设置里没接 pagePolicy')
+  assert.ok(flat.includes('Showme Often'), '控件没有名字')
+  const defaults = code.match(/const PREFS_FALLBACK = \{[^}]*\}/)
+  assert.ok(defaults !== null, '找不到 PREFS_FALLBACK')
+  assert.match(defaults[0], /pagePolicy: 'off'/, '客户端兜底默认值不是 off')
+})
+
+await internals.savePrefs({ pagePolicy: 'always' })
+check('设置页：切档走同一条 POST，只提交改的那一项', () => {
+  const calls = fetchCalls.filter(
+    (entry) =>
+      entry.url === '/api/showme/prefs' &&
+      entry.options?.method === 'POST' &&
+      String(entry.options.body).includes('pagePolicy'),
+  )
+  assert.equal(calls.length, 1, '应当是唯一一条只带 pagePolicy 的写请求')
+  assert.deepEqual(JSON.parse(calls[0].options.body), { pagePolicy: 'always' })
 })
 
 await Promise.all(asyncChecks)

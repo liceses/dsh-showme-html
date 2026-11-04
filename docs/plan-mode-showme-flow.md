@@ -14,7 +14,7 @@
 | `AutoOpen` | `lib/client.js:516-543` | 防抖 1.2s；宽度闸；`autoOpenSidebar` 闸；`opened` 去重；HEAD 后 `openTab` |
 | `Review` | `lib/client.js:1682-1720` `PlanPageAction` | 解析 `展示页：`；`planPageOpenOnReview` 时自动开；给按钮 |
 | `Sidebar` | `lib/client.js:283-291` | 页类型 `multiple: true`（**允许同页多 tab**） |
-| `Prefs` | `lib/index.js:86` / `lib/client.js:460` | 三个开关，用户级落盘 |
+| `Prefs` | `lib/index.js:86` / `lib/client.js:505` | 四个开关（0.4.0 起含 `pagePolicy`），用户级落盘 |
 
 > 渲染后的页面：`.dsh/showme/plan-mode-uml.html`（5 张 mermaid 图 + 缺陷表）；下面三张是它的截图。
 

@@ -133,10 +133,11 @@ const fakeCtx = {
       return () => {}
     },
   },
-  // 计划页指引走 systemPrompt.section；这里收下定义，供用例直接求值。
+  // 计划页 / 回答形态指引都走 systemPrompt.section；这里收下定义，供用例直接求值。
   inject: (names, callback) => callback(fakeCtx),
   systemPrompt: {
-    getSectionOrder: () => 10,
+    // 照宿主 SECTION_ORDERS 的两个真实值，才能断言我们两段的相对位置。
+    getSectionOrder: (name) => ({ DEPLOYMENT_PERSONA_PREFIX: 0, PLAN_POLICY: 500 })[name] ?? 0,
     section: (definition) => {
       captured.promptSections.push(definition)
       return () => {}
@@ -956,22 +957,28 @@ const prefsDefault = await getPrefs()
 check('没有偏好文件：回默认值', () => {
   const prefs = JSON.parse(prefsDefault.body).prefs
   assert.equal(prefs.autoOpenSidebar, true)
+  assert.equal(prefs.pagePolicy, 'off')
   assert.equal(prefs.planPage, 'offer')
   assert.equal(prefs.planPageOpenOnReview, true)
 })
 
-await postPrefs({ planPage: 'require', autoOpenSidebar: false })
+await postPrefs({ planPage: 'require', autoOpenSidebar: false, pagePolicy: 'prefer' })
 const prefsAfter = JSON.parse((await getPrefs()).body).prefs
 check('写入后再读：改过的值生效', () => {
   assert.equal(prefsAfter.planPage, 'require')
   assert.equal(prefsAfter.autoOpenSidebar, false)
+  assert.equal(prefsAfter.pagePolicy, 'prefer')
 })
 const savedPrefs = JSON.parse(await readFile(join(prefsHome, 'showme', 'prefs.json'), 'utf8'))
-check('偏好落在 $DSH_HOME/showme/prefs.json', () => assert.equal(savedPrefs.planPage, 'require'))
+check('偏好落在 $DSH_HOME/showme/prefs.json', () => {
+  assert.equal(savedPrefs.planPage, 'require')
+  assert.equal(savedPrefs.pagePolicy, 'prefer')
+})
 
-const prefsJunk = JSON.parse((await postPrefs({ planPage: 'nonsense', hack: 1 })).body).prefs
+const prefsJunk = JSON.parse((await postPrefs({ planPage: 'nonsense', pagePolicy: 'sometimes', hack: 1 })).body).prefs
 check('非法档位与未知键被忽略', () => {
   assert.equal(prefsJunk.planPage, 'require')
+  assert.equal(prefsJunk.pagePolicy, 'prefer')
   assert.equal('hack' in prefsJunk, false)
 })
 
@@ -999,6 +1006,48 @@ check('计划页提示：缺服务 / 读状态抛错 → 照旧注入（fail-ope
 })
 check('计划页提示：没有 agent 上下文 → 空串', () => {
   assert.equal(planSection.text({}), '')
+})
+
+// ---------- 回答形态（Showme Often 的插件内版本） ----------
+
+const policySection = captured.promptSections.find((one) => one.name === 'showme:page-policy')
+const withAgent = { agent: { session: 's1' } }
+
+check('回答形态提示：注册了 showme:page-policy，且早于计划策略', () => {
+  assert.ok(policySection !== undefined, 'systemPrompt 段没注册')
+  assert.ok(policySection.order < planSection.order, '两段的顺序不对')
+  assert.ok(Number.isFinite(policySection.order), 'order 必须是有限数，宿主会拒收')
+})
+
+// 上面几轮已经把 pagePolicy 写成了 prefer，这里先显式回到 off 再测。
+await postPrefs({ pagePolicy: 'off' })
+check('回答形态提示：off → 一个字都不注入', () => {
+  assert.equal(policySection.text(withAgent), '')
+})
+
+await postPrefs({ pagePolicy: 'prefer' })
+const preferText = policySection.text(withAgent)
+check('回答形态提示：prefer → 讲「默认做页」，并点名可纯文字的两个例外', () => {
+  assert.ok(preferText.length > 200, '太短，像没注入')
+  assert.match(preferText, /showme page/)
+  assert.match(preferText, /show_html/)
+  assert.match(preferText, /showme-report/)
+  assert.match(preferText, /postMessage/)
+  assert.match(preferText, /plain text/)
+  assert.equal(policySection.text({}), '', '没有 agent 时不该注入')
+})
+
+await postPrefs({ pagePolicy: 'always' })
+check('回答形态提示：always → 每条都出页，正文限五行', () => {
+  const text = policySection.text(withAgent)
+  assert.match(text, /always answer with a showme page/)
+  assert.match(text, /five lines/)
+  assert.notEqual(text, preferText, 'always 与 prefer 不该是同一段文字')
+})
+
+await postPrefs({ pagePolicy: 'off' })
+check('回答形态提示：再切回 off → 恢复空串', () => {
+  assert.equal(policySection.text(withAgent), '')
 })
 
 const prefsPut = await rawRequest(`${base}/prefs`, { method: 'PUT' })

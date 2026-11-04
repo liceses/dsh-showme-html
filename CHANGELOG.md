@@ -1,5 +1,30 @@
 # 变更记录
 
+## 0.4.0 — 2026-11-04
+
+**Showme Often 从一个 agent 预设，改成插件内的一个开关（提示词注入）。**
+
+起因是用户点破：「不就是注入提示词让 ai 多用 showme page 么，做成插件内可选项吧」。
+上一版把它做成了独立预设（0.3.5），代价比预期大：DSH 的预设只认内置四个 id，而
+`dsh-ops` 0.4.x 的每一行发布门都是 `modeOf(agent) === mode`，自定义预设一选，
+`ops_bash` 与整套常驻文件工具**全部消失**（上游 issue #436 / #528 明确是设计如此，
+要等 0.5 的 `dsh-ops/integration` 才能 opt-in）。写成提示注入则完全不碰预设 ——
+会话仍是 `standard`，工具面一个不少。
+
+- **`prefs.pagePolicy`**：`off`（默认）/ `prefer` / `always`，与 `planPage` 一起走
+  `GET|POST /api/showme/prefs` 的枚举白名单；非法值照旧不顶掉已存的值。
+- **新提示段 `showme:page-policy`**：order = `DEPLOYMENT_PERSONA_PREFIX + 50`（= 50），
+  紧跟 persona、早于 `PLAN_POLICY`(500)。`off` 时返回空串（等于没加），
+  `prefer` / `always` 各一段开头 + 四句共用规则（先写页面再 `show_html`、先读
+  `showme-report` skill、每页可回话、正文只留摘要与待决定事项、工具不可用时一句话退回 Markdown）。
+- **`prefer` 给的是触发清单而不是命令**：多条目 / 对比 / 表格 / 时间线 / 流程 / 截图 /
+  待逐项批准 / 可点名 → 默认出页；两个例外是短对话与明确要文字或代码；拿不准就做页。
+- **插件页设置**多一个三档下拉（`lib/client.js`）；`PREFS_FALLBACK` 同步加 `pagePolicy: 'off'`。
+- **删掉 `preset/showme-often/`**，并从本机 desktop profile 卸载（预设名册回到四条）。
+  卸载前已确认：只有 7 个历史会话用过它，且都在同一个工作区，当前会话与其余会话都是 `standard`。
+- **顺带解决 dsh-ops 兼容**：不再需要 0.5 alpha，也不需要改 profile 的 ops 行。
+- 断言 **445**（宿主 154 → 159，客户端 100 → 102）。
+
 ## 0.3.6 — 2026-11-03
 
 **plan 模式展示页：把两套打开器合成一条链路（`docs/plan-mode-showme-flow.md` 里 11 条缺陷的 P0/P1 部分）。**
@@ -30,7 +55,10 @@
 
 断言 431 → **437**（客户端 94 → 100：门函数、键归一化、标记解析三组纯函数用例 + 双开/晚到两条行为用例）。
 
-## 0.3.5 — 2026-11-03
+## 0.3.5 — 2026-11-03（已被 0.4.0 取代）
+
+> 这一版加的 `preset/showme-often/` 已在 0.4.0 删除：预设方案会连带弄丢 `dsh-ops` 的整套工具。
+> 现在同样的效果由 `prefs.pagePolicy` 的提示注入提供，见上方 0.4.0。
 
 **仓库内新增一个 agent 预设：Showme Often —— 选中它的会话，回答默认是一页。**
 
