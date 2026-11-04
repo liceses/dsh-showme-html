@@ -54,6 +54,9 @@
   /** 渲染出来的可点名 id（按出现顺序）。 */
   var ids = []
 
+  /** 条目自带选项集时收集到的选项词（回执词表要把它们并进去）。 */
+  var optionWords = []
+
   // ══════════════ 小工具 ══════════════
 
   /** HTML 转义。所有来自数据的文本都要过这一道。 */
@@ -229,6 +232,62 @@
   }
 
   /**
+   * 条目内选项集：「这一条有两条互斥的路，挑一条」。
+   *
+   * 为什么复用 `.sm-btn` + `data-id`/`data-w` 而不是自己一套状态：
+   * 判定在 `state[id]` 里只存一个词，`toggle()` / `refreshPressed()` / `sync()` /
+   * 草稿通道 / click 委托全都零改动就生效；同一个 id 只有一个 verdict，
+   * 互斥是天然的。**不要**加 `data-mode`——那是 pick 的跨条目单选。
+   *
+   * @param item - 带 `options` 的条目：`[{ value, label, why }]`。
+   */
+  function optionsHtml(item) {
+    var id = String(item.id || '')
+    var options = list(item.options)
+    var preferred = item.preferred === undefined ? '' : String(item.preferred)
+    var cells = options.map(function (option) {
+      var value = String(option.value === undefined ? '' : option.value)
+      if (optionWords.indexOf(value) === -1) optionWords.push(value)
+      var label = option.label === undefined ? value : String(option.label)
+      var why = option.why === undefined ? '' : String(option.why)
+      return '<button class="sm-btn sm-opt" type="button" role="radio" aria-checked="false"' +
+        ' data-id="' + esc(id) + '" data-w="' + esc(value) + '"' +
+        ' aria-label="' + esc(id + ' ' + value + ' ' + label) + '">' +
+        '<span class="sm-optTop"><span class="sm-optVal">' + esc(value) + '</span>' +
+        '<span class="sm-optLabel">' + esc(label) + '</span>' +
+        (preferred === value ? '<span class="sm-optPref">倾向</span>' : '') + '</span>' +
+        (why ? '<span class="sm-optWhy">' + inlineMd(why) + '</span>' : '') +
+        '<span class="sm-optPick"><span class="sm-optDot"></span>选这个</span>' +
+        '</button>'
+    }).join('')
+    return '<div class="sm-opts" role="radiogroup" aria-label="' + esc(id) + ' 的选项">' + cells + '</div>' +
+      '<input class="sm-note" data-id="' + esc(id) + '" placeholder="备注（可空）" value="">'
+  }
+
+  /** 这一条是自己挑选项（而不是共用页级判定词）。 */
+  function hasOptions(item) {
+    return Array.isArray(item.options) && item.options.length > 0
+  }
+
+  /**
+   * 回执词表：页级判动词 + 条目选项的词，去重保序、最多 8 个。
+   *
+   * 为什么要合并：带 options 的条目根本不接受页级判定词，只列 `同意/要改/不要`
+   * 会让用户以为能填那些词。上限 8 个是为了那一行 chips 不换行换到失控。
+   */
+  function wordsForChips() {
+    var out = []
+    function push(word) {
+      if (word === '' || out.indexOf(word) !== -1) return
+      out.push(word)
+    }
+    for (var i = 0; i < verdicts.length; i++) push(String(verdicts[i]))
+    for (var n = 0; n < optionWords.length; n++) push(optionWords[n])
+    if (out.length <= 8) return out
+    return out.slice(0, 8).concat(['…'])
+  }
+
+  /**
    * 带图的条目：发一张卡（视觉重量只给真需要看图的东西，孤立效应）。
    * @param item - { id, title, desc, image, caption }。
    */
@@ -244,7 +303,7 @@
         : '') +
       '<figure class="evidence"><img class="sm-img" src="' + esc(item.image) + '" alt="' + esc(item.title || '') + '">' +
       (item.caption ? '<figcaption>' + inlineMd(item.caption) + '</figcaption>' : '') + '</figure>' +
-      '<div class="sm-ctl">' + controlHtml(id, words, mode) + '</div>' +
+      '<div class="sm-ctl">' + (hasOptions(item) ? optionsHtml(item) : controlHtml(id, words, mode)) + '</div>' +
       '</div>'
   }
 
@@ -255,14 +314,14 @@
   function lineHtml(item, words, mode) {
     var id = String(item.id || '')
     ids.push(id)
-    return '<div class="sm-line" data-item="' + esc(id) + '" data-done="0">' +
+    return '<div class="sm-line' + (hasOptions(item) ? ' sm-hasOpts' : '') + '" data-item="' + esc(id) + '" data-done="0">' +
       '<div class="sm-lineMain"><div class="sm-head"><span class="sm-id">' + esc(id) + '</span>' +
       (item.title ? '<h3>' + esc(item.title) + '</h3>' : '') + '</div>' +
       (item.desc
         ? '<p class="sm-desc' + (String(item.desc).length > 90 ? ' sm-clamped' : '') + '" data-desc="' + esc(id) + '">' + inlineMd(item.desc) + '</p>' +
           (String(item.desc).length > 90 ? '<button class="sm-more" type="button" data-more="' + esc(id) + '">展开</button>' : '')
         : '') + '</div>' +
-      '<div class="sm-ctl">' + controlHtml(id, words, mode) + '</div>' +
+      '<div class="sm-ctl">' + (hasOptions(item) ? optionsHtml(item) : controlHtml(id, words, mode)) + '</div>' +
       '</div>'
   }
 
@@ -635,12 +694,37 @@
     sync()
   }
 
+  /**
+   * 从事件目标向上找第一个带某个类名的节点。
+   *
+   * 为什么要它：按钮里嵌了 span（选项的 value / label / 理由），点击的 target
+   * 通常是那个 span 而不是按钮本身 —— 直接看 target.className 会漏掉绝大多数点击。
+   *
+   * @param node - 起始节点。
+   * @param name - 类名（不含点）。
+   */
+  function closestByClass(node, name) {
+    var one = node
+    var limit = 6
+    while (one && limit > 0) {
+      if (one.className && String(one.className).indexOf(name) !== -1) return one
+      one = one.parentNode
+      limit -= 1
+    }
+    return null
+  }
+
   /** 把按钮的 aria-pressed 刷成与 state 一致。 */
   function refreshPressed() {
     var buttons = document.querySelectorAll('.sm-btn')
     for (var i = 0; i < buttons.length; i++) {
       var one = state[buttons[i].getAttribute('data-id')]
-      buttons[i].setAttribute('aria-pressed', one && one.verdict === buttons[i].getAttribute('data-w') ? 'true' : 'false')
+      var on = one && one.verdict === buttons[i].getAttribute('data-w')
+      buttons[i].setAttribute('aria-pressed', on ? 'true' : 'false')
+      // 选项是 radiogroup 里的 radio：同一个状态要同时反映在 aria-checked 上。
+      if (buttons[i].className.indexOf('sm-opt') !== -1) {
+        buttons[i].setAttribute('aria-checked', on ? 'true' : 'false')
+      }
     }
   }
 
@@ -668,19 +752,23 @@
       var target = event.target
       if (!target || !target.getAttribute || !target.className) return
       if (target.id === 'sm-draft-clear') { clearDraft(); return }
-      if (target.className.indexOf('sm-more') !== -1) {
-        var row = target.parentNode
+      // 按钮里有 span（选项的 value / label / 理由），点到的往往是内层节点：
+      // 一律往上找到带类名的那一层，否则点字不生效、只有点边框才生效。
+      var more = closestByClass(target, 'sm-more')
+      if (more !== null) {
+        var row = more.parentNode
         if (row && row.querySelector) {
           var desc = row.querySelector('.sm-desc')
           if (desc) desc.classList.remove('sm-clamped')
         }
-        if (row && row.removeChild) row.removeChild(target)
+        if (row && row.removeChild) row.removeChild(more)
         return
       }
-      if (target.className.indexOf('sm-btn') === -1) return
-      var id = target.getAttribute('data-id')
-      var word = target.getAttribute('data-w')
-      if (id && word) toggle(id, word, target.getAttribute('data-mode'))
+      var button = closestByClass(target, 'sm-btn')
+      if (button === null) return
+      var id = button.getAttribute('data-id')
+      var word = button.getAttribute('data-w')
+      if (id && word) toggle(id, word, button.getAttribute('data-mode'))
     })
     main.addEventListener('input', function (event) {
       var target = event.target
@@ -757,6 +845,10 @@
     '.sm-line + .sm-line{border-top:1px solid var(--line,#e5e7eb)}',
     '.sm-line:hover{background:var(--surface-2,#f4f4f4)}',
     '.sm-lineMain{display:flex;flex-direction:column;gap:3px;min-width:0}',
+    // 带选项的条目占满整行：296px 的控件列放不下两张带理由的选项卡。
+    '.sm-line.sm-hasOpts{grid-template-columns:1fr}',
+    '.sm-hasOpts .sm-ctl{grid-template-columns:1fr}',
+    '.sm-hasOpts .sm-opts{max-width:760px}',
 
     // 控件层：分段控件 + 备注一行，钉在底部
     '.sm-ctl{display:grid;gap:8px;margin-top:auto}',
@@ -773,6 +865,23 @@
     '.sm-note:focus{outline:none;border-color:var(--accent,#3b82f6)}',
     '.sm-img{display:block;width:100%;max-height:360px;object-fit:contain;background:var(--surface-2,#f4f4f4)}',
 
+    // 条目内选项集（A/B 两条走法挑一条）：两张并排的选项卡，理由写在选项里。
+    // .sm-opt 与 .sm-btn 同时出现在元素上，所以这里用双类提升特异性、覆盖分段按钮的外观。
+    '.sm-opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}',
+    '.sm-btn.sm-opt{display:grid;gap:7px;justify-items:start;text-align:left;white-space:normal;padding:12px 13px;border:1px solid var(--line-strong,#d5dae2);border-radius:var(--r-sm,10px);background:var(--surface,#fff);color:var(--ink,#111);font:inherit}',
+    '.sm-btn.sm-opt + .sm-btn.sm-opt{border-left:1px solid var(--line-strong,#d5dae2)}',
+    '.sm-btn.sm-opt:hover{background:var(--surface-2,#f4f4f4)}',
+    '.sm-btn.sm-opt[aria-pressed="true"]{background:var(--surface,#fff);color:var(--ink,#111);border-color:var(--accent,#3b82f6);box-shadow:0 0 0 3px var(--accent-soft,#eef5ff)}',
+    '.sm-optTop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
+    '.sm-optVal{font:700 var(--f-xs,12px)/1 var(--mono,monospace);min-width:22px;height:22px;display:inline-grid;place-items:center;padding:0 6px;border-radius:6px;background:var(--surface-2,#f4f4f4);border:1px solid var(--line-strong,#d5dae2);color:var(--ink-2,#4b5563)}',
+    '.sm-btn.sm-opt[aria-pressed="true"] .sm-optVal{background:var(--accent,#3b82f6);border-color:var(--accent,#3b82f6);color:#fff}',
+    '.sm-optLabel{font:600 var(--f-sm,13.5px)/1.35 var(--font,sans-serif)}',
+    '.sm-optPref{font:600 var(--f-xs,12px)/1 var(--font,sans-serif);padding:3px 7px;border-radius:5px;background:var(--good-soft,#ecfdf5);border:1px solid var(--good-line,#a7f3d0);color:var(--good,#047857)}',
+    '.sm-optWhy{font:400 var(--f-xs,12px)/1.62 var(--font,sans-serif);color:var(--ink-2,#4b5563);display:block}',
+    '.sm-optPick{display:flex;align-items:center;gap:6px;font:400 var(--f-xs,12px)/1 var(--font,sans-serif);color:var(--muted,#8a8a8a);margin-top:2px}',
+    '.sm-optDot{width:13px;height:13px;border-radius:50%;border:1px solid var(--line-strong,#d5dae2);background:var(--surface,#fff);display:inline-block}',
+    '.sm-btn.sm-opt[aria-pressed="true"] .sm-optDot{border-color:var(--accent,#3b82f6);background:var(--accent,#3b82f6);box-shadow:inset 0 0 0 3px var(--surface,#fff)}',
+
     // 回执区
     '.sm-draft{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 18px;padding:10px 14px;border:1px dashed var(--line-strong,#d5dae2);border-radius:var(--r-sm,10px);background:var(--surface,#fff);font-size:var(--f-sm,13.5px);color:var(--ink-2,#4b5563)}',
     '.sm-draft span{flex:1;min-width:200px}',
@@ -785,8 +894,11 @@
     // 窄屏：行折成一列，分段控件铺满（菲茨定律：别把小按钮塞在窄格里）
     '@media (max-width:760px){.sm-line{grid-template-columns:1fr;gap:10px;align-items:start}',
     '.sm-ctl{width:100%}.sm-seg{display:flex;width:100%;justify-self:stretch}.sm-btn{flex:1}',
+    '.sm-btn.sm-opt{flex:none;width:100%}',
     '.sm-list-solo .sm-line{grid-template-columns:1fr}.sm-list-solo .sm-ctl{grid-auto-flow:row}',
     '.sm-list-solo .sm-note{width:100%}}',
+    // 选项卡窄屏一列（两列会挤成窄条，理由读不动）
+    '@media (max-width:820px){.sm-opts{grid-template-columns:1fr}}',
     // 一张卡并排时，窄屏回到上下堆叠
     '@media (max-width:900px){.sm-split{grid-template-columns:1fr}}',
     // 横屏：报头两栏（标题在左、元信息在右），纵向省下一整段
@@ -807,6 +919,7 @@
     // 先把状态清干净，允许重复渲染
     ids = []
     state = {}
+    optionWords = []
 
     var body = SHAPE === 'doc' ? renderDoc(data)
       : SHAPE === 'pick' ? renderPick(data)
@@ -834,7 +947,7 @@
       document.getElementById('sm-receipt').innerHTML = receiptHtml()
       // 词表必须列出来：用户要知道能填什么，模型要知道收到了什么（skill §3.1）
       document.getElementById('sm-words').innerHTML =
-        verdicts.map(function (word) { return '<span class="chip accent">' + esc(word) + '</span>' }).join('') +
+        wordsForChips().map(function (word) { return '<span class="chip accent">' + esc(word) + '</span>' }).join('') +
         '<span class="chip">备注可空</span>'
     }
 

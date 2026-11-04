@@ -1,5 +1,38 @@
 # 变更记录
 
+## 0.5.0 — 2026-11-04
+
+**一条里两条走法：`items[].options`，回执直接写 `p1 A`。**
+
+起因还是上一版那张截图：四条审计结论，每条其实只有一件事要定——**走 A 还是走 B**。
+当时模板只有两级选项（全页共用 `verdicts`、`pick` 里选候选），模型只能把两条路写成
+`desc` 里的一段话，于是撞上 0.4.1 的 240 字上限；就算塞进去了，回执也只能写 `p1 同意`，
+说不出"我选的是 A"。用户看完方案页回「design-b 同意 / design-a 不要 / design-c 同意」，
+于是只做 B：
+
+- **字段**：`items[].options: [{ value, label, why }]`（2–4 个）+ 可选 `preferred`。
+  `value` 就是回执里的判定词（≤12 个字母数字 `._-`、同条目内唯一）；`label` ≤40 字；
+  `why` ≤300 字且不许空行 / 列表 / 表格（段落级内容搬 `blocks`）。
+- **互斥怎么来的**：不另起状态。选项复用 `.sm-btn` + `data-id`/`data-w`，
+  判定在 `state[id]` 里只有一个 `verdict` 词 → `toggle` / `refreshPressed` / `sync` /
+  草稿通道 / click 委托全部零改动，互斥是天然的。**`data-mode` 不参与**（那是 pick 的跨条目单选）。
+- **无障碍**：`role="radiogroup"` + 每个选项 `role="radio"` + `aria-checked` 随状态刷。
+- **回执词表**：`wordsForChips()` 把页级词与选项 value 合并去重（上限 8 个），
+  否则 chips 会列一堆这一条根本不接受的词。
+- **排版**：两张选项卡并排、选中靠描边 + 光晕（不靠换底色）；≤820px 收成一列。
+  带选项的条目占满整行（296px 的控件列放不下两张带理由的卡）。
+- **宿主预检**：`checkOptions()` 校验数量 / value 形状 / 重复 / `preferred` 指向 / `why` 长度与结构，
+  接在 `findProseItems()` 之后、结构 markdown 之前；`formatProseErrors()` 现在分两段
+  （散文 / 选项集），两段都有逃生阀 `plain: true`。`pick.candidates[]` 上的 options 一律忽略
+  —— 候选是"挑对象"，不是"挑走法"。
+- **修掉一个真机才现形的 bug**：click 委托原来只看 `event.target` 的类名，而选项卡内部有
+  `span`（value / label / 理由），点文字时 target 是那个 span → 只有点边框才生效。
+  现在 `closestByClass()` 向上找 6 层到带 `sm-btn` / `sm-more` 的节点。
+- 断言 **486**（清单 7 / 宿主 176 / mermaid 35 / 客户端 102 / 预设 38 / 模板 79 / 页面 49）。
+  宿主 +9（选项集 6 条失败用例 + 2 条放行 + 忽略 candidates），模板 +8（radiogroup / 复用判定 /
+  aria-checked / 词表合并 / 布局）；页面 +12 是因为 `options-plan.html` 那一页的 `#items`
+  分支以前在冒烟里直接失败、现在能跑过（DOM 桩把 `appendChild` 的子节点 HTML 也算进 innerHTML）。
+
 ## 0.4.1 — 2026-11-04
 
 **条目位只放一句话：写成长段落，`show_html` 当场失败。**

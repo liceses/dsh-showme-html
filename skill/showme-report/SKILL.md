@@ -60,6 +60,8 @@ whenToUse: 你准备用 HTML 页面代替长篇 Markdown 向用户汇报；或�
   表格 / 列表 / 引用 / 标题 / 围栏代码**必须用块类型**（写成 markdown 会让 `show_html` 失败）。
 - `image` 必须真实存在，否则 `show_html` 直接失败（缺图 = 裂图，不让它上屏）。
 - **`image` 决定形态**：带了就成卡，不带就走行 —— 别给每条都塞图。
+- **一条里有 A/B 两条走法** → `items[].options`（2–4 个 `{value, label, why}` + 可选 `preferred`），
+  回执写 `p1 A`；**别**把两条路写成 `desc` 里的一段话（会撞 240 字上限，而且回执说不出"选哪条"）。
 
 ### 1.2 要画图就写 mermaid
 

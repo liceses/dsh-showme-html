@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.4.1-blue.svg)
+![Version](https://img.shields.io/badge/version-0.5.0-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -314,6 +314,22 @@ skill 用文字规定"回执怎么做"，模型每次都重新实现一遍，于
 把一整段证据灌进去，行会被撑成段落高，控件就飘到段落中间——所以 `desc` 超过 240 字、含空行分段、
 含列表行或表格行时，`show_html` 同样**当场失败**，并点名这条该搬到 `callout` / `kv` / `table` / `text`（或整页换 `doc`）。
 确实要长文就给数据加 `plain: true`。另外模板会兜底：`desc` 长于 90 字时折三行并给一个「展开」，行内控件永远贴第一行。
+
+**一条里有两条走法就给它 `options`。** 审计结论常是「A 这么修 / B 那么修，你定」——这种一条不是一个判词，
+而是一组**互斥走法**。给条目加 `items[].options: [{ value, label, why }]`（2–4 个）+
+可选 `preferred`（只标倾向、不预选），那一行的右侧就换成两张选项卡，选项里写理由，点一下回执就写 `p1 A`：
+
+```js
+{ id: 'p1', title: 'hidden 渠道作品的详情页', desc: '两条路挑一条', preferred: 'A',
+  options: [
+    { value: 'A', label: '详情 404', why: '§EN-1 的字面是「完全不可见」' },
+    { value: 'B', label: '200 但不给预览', why: '要给 DemoDetail 加 previewable 字段' },
+  ] }
+```
+
+`value` 就是判定词（≤12 个字母数字 `._-`、同条目内唯一）；`label` ≤40 字；`why` ≤300 字且不许空行 / 列表 / 表格。
+写坏了（选项数量不对、value 重复或带空格、`preferred` 指向不存在的值、理由超长）同样**当场失败**并指明该怎么改。
+`pick` 的 `candidates[]` 上没有这组字段——候选是"挑对象"，不是"挑走法"。
 
 宿主在你第一次展示页面时把骨架落到 `.dsh/showme/templates/`（create-only）：
 
@@ -632,6 +648,8 @@ DSH 自己的错误行（`turn-error`）用的就是同一招。工具行留着�
 - **页面在卡片里能力受限**：见上表；需要 `localStorage` / 表单 / 下载时请用「浏览器打开」。
 - **散文检查看的是"长度与形状"，不是"写得好不好"**：`desc` 一句话但 240 字以内一律放行；
   反过来，一段写得很紧凑的长文也会被拦（那是故意的——它该进块）。逃生阀是数据里的 `plain: true`。
+- **选项集只有一层**：一条只能有一组互斥走法（2–4 个），不能"选了 A 之后再问 A1/A2"。
+  真需要分支就在页面里写两段，或拆成两次交付。
 - **不支持 `file://` 链接**：浏览器禁止从 http 页面跳到 `file://`，所以「在浏览器打开」走 HTTP 路由。
 - 单页上限 8 MiB；反馈正文上限 256 KiB。
 - **`ctx.get('sessions')` / `ctx.get('sessionQuery')` 在路由所在的插件上下文里取不到**
@@ -685,7 +703,7 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 457 项离线断言：清单 7 / 宿主 167 / mermaid 35 / 客户端 102 / 预设 38 / 模板 71 / 页面 37
+npm test                # 486 项离线断言：清单 7 / 宿主 176 / mermaid 35 / 客户端 102 / 预设 38 / 模板 79 / 页面 49
                         # （Windows 上建不出软链接时，宿主那组会多打一行 skip，**不计入** 159）
 
 npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区** / 落地副本

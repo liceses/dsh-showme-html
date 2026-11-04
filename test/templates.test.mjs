@@ -617,13 +617,60 @@ check('只有长于 90 字才折行、才渲染展开', () => {
   assert.match(source, /length > 90 \? '<button class="sm-more"/, '展开按钮没有按长度门控')
 })
 check('「展开」只改展示，不碰回执状态', () => {
-  const at = source.indexOf("className.indexOf('sm-more')")
+  const at = source.indexOf("closestByClass(target, 'sm-more')")
   assert.ok(at !== -1, '没有「展开」的处理分支')
-  const body = source.slice(at, at + 400)
+  const body = source.slice(at, at + 500)
   assert.ok(!/toggle\(/.test(body), '「展开」调用了 toggle')
   assert.ok(!/state\[/.test(body), '「展开」动到了回执状态')
   assert.match(body, /classList\.remove\('sm-clamped'\)/, '「展开」没有去掉折行')
 })
+check('点击用就近上溯找按钮（按钮里嵌了 span，直接看 target 会点不动）', () => {
+  assert.match(source, /function closestByClass\(node, name\)/, '没有 closestByClass')
+  assert.match(source, /var button = closestByClass\(target, 'sm-btn'\)/, '判定按钮没走就近上溯')
+  assert.match(source, /button\.getAttribute\('data-w'\)/, '上溯之后没把按钮当事件源')
+})
+console.log('\n[选项集] 条目内 A/B 挑一条')
+
+// 复用 .sm-btn + data-id/data-w，判定在 state[id] 里只存一个词 → 互斥天然成立，
+// toggle / 刷新 / 草稿通道零改动。这条守住「别自己另起一套状态」。
+check('选项是 radiogroup，每个选项是 radio', () => {
+  assert.match(source, /<div class="sm-opts" role="radiogroup" aria-label="/, '没有 radiogroup')
+  assert.match(source, /class="sm-btn sm-opt" type="button" role="radio" aria-checked="false"/, '选项不是 radio')
+})
+check('选项复用判定机制：data-id + data-w，且不带 data-mode', () => {
+  const at = source.indexOf('function optionsHtml')
+  assert.ok(at !== -1, '没有 optionsHtml')
+  const body = source.slice(at, at + 1600)
+  assert.match(body, /data-id="/, '选项没有 data-id')
+  assert.match(body, /data-w="/, '选项没有 data-w')
+  assert.ok(!/data-mode/.test(body), '选项带了 data-mode（那是 pick 的跨条目单选）')
+})
+check('选项也带备注框（判定了还能补一句）', () => {
+  const at = source.indexOf('function optionsHtml')
+  const body = source.slice(at, at + 1800)
+  assert.match(body, /class="sm-note" data-id="/, '选项之后没有备注框')
+})
+check('aria-checked 跟着状态刷新（radio 的无障碍语义）', () => {
+  const at = source.indexOf('function refreshPressed')
+  const body = source.slice(at, at + 700)
+  assert.match(body, /indexOf\('sm-opt'\) !== -1/, '没有针对选项的分支')
+  assert.match(body, /aria-checked/, '没有刷新 aria-checked')
+})
+check('只有带 options 的条目才用选项集，其余仍走页级判定', () => {
+  assert.match(source, /hasOptions\(item\) \? optionsHtml\(item\) : controlHtml\(id, words, mode\)/, '分发不对')
+  assert.match(source, /Array\.isArray\(item\.options\) && item\.options\.length > 0/, 'hasOptions 判据不对')
+})
+check('回执词表并进选项词（页级词不能冒充能填的词）', () => {
+  assert.match(source, /optionWords\.push\(value\)/, '没有收集选项词')
+  assert.match(source, /function wordsForChips/, '没有 wordsForChips')
+  assert.match(source, /wordsForChips\(\)\.map/, 'chips 没用合并后的词表')
+})
+check('两张选项卡并排、选中靠边框与光晕（不靠换底色）', () => {
+  assert.match(source, /\.sm-opts\{display:grid;grid-template-columns:1fr 1fr/, '选项不是两列网格')
+  assert.match(source, /\.sm-btn\.sm-opt\[aria-pressed="true"\]\{[^}]*border-color:var\(--accent/, '选中态没有描边')
+  assert.match(source, /@media \(max-width:820px\)\{\.sm-opts\{grid-template-columns:1fr\}\}/, '窄屏没有回一列')
+})
+
 console.log('\n[约束] 沙箱里不能用的东西')
 
 // 必须剥掉注释再查：头注释里写着"不依赖 localStorage"，否则匹配到的是自己的文档。

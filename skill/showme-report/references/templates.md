@@ -46,6 +46,7 @@ window.SHOWME = { title:'…', sections:[{ heading:'…', blocks:[ { type:'text'
 | `sections[].heading` / `sub` / `intro` / `two` | 小节标题 / 副标题 / 引导语 / 两栏 |
 | `items[].id` | **必填、唯一、短 ASCII**，会显示在页面上，也进回执行 |
 | `items[].image` | **相对页面**的路径；**给了才成卡**（这是"密度"的开关） |
+| `items[].options[]` / `preferred` | **条目内选项集**：2–4 个互斥走法 `{value, label, why}`，回执写 `id A`；`preferred` 只标倾向、不预选。有 `options` 的条目不显示页级判定词 |
 | `sections[].sectionReceipt` | `report` 专用，`false` = 这一节没有轻回执 |
 
 ## 块类型（`report` / `doc` 的 `blocks`，以及 `review` 每节的 `blocks`）

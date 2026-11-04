@@ -1171,6 +1171,102 @@ const prosePlain = await tool.execute({ path: '.dsh/showme/prose-plain.html' }, 
 )
 check('加了 plain: true：跳过散文检查', () => assert.equal(prosePlain, null, String(prosePlain && prosePlain.message)))
 
+// ── 条目内选项集（items[].options）：A/B 两条走法挑一条 ────────────────────
+// 合法形状（两条走法 + 倾向）必须放行；写坏的（数量 / value / 重复 / preferred / why）当场失败。
+const optGood = "window.SHOWME = { title: 'x', sections: [{ heading: 'h', items: [{ id: 'p1', title: 'hidden 详情页', desc: '两条路挑一条', preferred: 'A', options: [{ value: 'A', label: '详情 404', why: '§EN-1 说完全不可见' }, { value: 'B', label: '200 但不给预览', why: '要加 previewable 字段' }] }] }] }"
+await writeFile(join(workspace, '.dsh', 'showme', 'opt-good.html'), pageBody, 'utf8')
+await writeFile(join(workspace, '.dsh', 'showme', 'opt-good.data.js'), optGood + "\n", 'utf8')
+const optGoodResult = await tool.execute({ path: '.dsh/showme/opt-good.html' }, exec).then(
+  () => null,
+  (error) => error,
+)
+check('两条走法 + preferred：放行', () => assert.equal(optGoodResult, null, String(optGoodResult && optGoodResult.message)))
+
+/** 写一份选项集数据并跑一次 show_html，返回抛出的错误（没抛就是 null）。 */
+async function runOptions(name, body) {
+  await writeFile(join(workspace, '.dsh', 'showme', `opt-${name}.html`), pageBody, 'utf8')
+  await writeFile(join(workspace, '.dsh', 'showme', `opt-${name}.data.js`), `window.SHOWME = ${body}\n`, 'utf8')
+  return tool.execute({ path: `.dsh/showme/opt-${name}.html` }, exec).then(
+    () => null,
+    (error) => error,
+  )
+}
+
+/** 一条 decision 的最小骨架，options 由参数给。 */
+function decision(id, options, extra) {
+  return `{ title: 'x', sections: [{ heading: 'h', items: [{ id: '${id}', title: 't', desc: '一句话', options: ${options}${extra ? ', ' + extra : ''} }] }] }`
+}
+
+// 只有 1 个选项：不是选择题（那是确认）。
+const oneOption = await runOptions('one', decision('p1', "[{ value: 'A', label: '只有一条' }]"))
+check('只有 1 个选项：调用失败，并说明要 2–4 个', () => {
+  assert.ok(oneOption !== null, '1 个选项没被拦下来')
+  assert.match(oneOption.message, /选项集/)
+  assert.match(oneOption.message, /2–4/)
+  assert.match(oneOption.message, /p1/)
+})
+
+// 5 个选项：用户不比较了，该拆页面。
+const fiveOptions = await runOptions(
+  'five',
+  decision('p1', "[{ value: 'A' }, { value: 'B' }, { value: 'C' }, { value: 'D' }, { value: 'E' }]"),
+)
+check('5 个选项：调用失败', () => {
+  assert.ok(fiveOptions !== null, '5 个选项没被拦下来')
+  assert.match(fiveOptions.message, /2–4/)
+})
+
+// value 带空格：回执一行一条，value 就是那个词，不能有空格。
+const spaced = await runOptions('spaced', decision('p1', "[{ value: 'A 404' }, { value: 'B' }]"))
+check('value 带空格：调用失败', () => {
+  assert.ok(spaced !== null, 'value 带空格没被拦下来')
+  assert.match(spaced.message, /不能有空格/)
+})
+
+// 重复 value：回执里分不清是哪条。
+const dup = await runOptions('dup', decision('p1', "[{ value: 'A' }, { value: 'A' }]"))
+check('value 重复：调用失败', () => {
+  assert.ok(dup !== null, '重复 value 没被拦下来')
+  assert.match(dup.message, /重复/)
+})
+
+// preferred 指向不存在的 value。
+const badPref = await runOptions('pref', decision('p1', "[{ value: 'A' }, { value: 'B' }]", "preferred: 'C'"))
+check('preferred 指错：调用失败', () => {
+  assert.ok(badPref !== null, 'preferred 指错没被拦下来')
+  assert.match(badPref.message, /preferred/)
+  assert.match(badPref.message, /C/)
+})
+
+// why 超长：理由是一段，不是一篇。
+const longWhy = '理由很长。'.repeat(70)
+const whyTooLong = await runOptions(
+  'longwhy',
+  decision('p1', `[{ value: 'A', why: ${JSON.stringify(longWhy)} }, { value: 'B' }]`),
+)
+check('why 超过 300 字：调用失败并点名 p1/A', () => {
+  assert.ok(whyTooLong !== null, '超长理由没被拦下来')
+  assert.match(whyTooLong.message, /上限 300/)
+  assert.match(whyTooLong.message, /p1\/1/)
+})
+
+// why 里有空行分段：理由位不是文档位。
+const whyBlank = await runOptions(
+  'blankwhy',
+  decision('p1', "[{ value: 'A', why: '第一段。' + String.fromCharCode(10).repeat(3) + '第二段。' }, { value: 'B' }]"),
+)
+check('why 里有空行分段：调用失败', () => {
+  assert.ok(whyBlank !== null, '理由里的空行没被拦下来')
+  assert.match(whyBlank.message, /空行分段/)
+})
+
+// candidates 上的 options 一律忽略（候选不是决策，概念不同）。
+const pickOptions = await runOptions(
+  'pick',
+  "{ title: 'x', candidates: [{ id: 'a', title: 'A', options: [{ value: 'X' }] }] }",
+)
+check('pick 候选上的 options 被忽略：放行', () => assert.equal(pickOptions, null, String(pickOptions && pickOptions.message)))
+
 // 数据文件里是**代码**而不是纯数据（vm 里跑不起来）：fail-open，不拦。
 await writeFile(join(workspace, '.dsh', 'showme', 'prose-dyn.html'), pageBody, 'utf8')
 await writeFile(

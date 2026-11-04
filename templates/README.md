@@ -126,8 +126,29 @@ window.SHOWME = {
 | `items[].desc` | string | 一句话说明 |
 | `items[].image` | string | **相对页面**的图片路径（给了才成卡） |
 | `items[].caption` | string | 图注 |
+| `items[].options` | object[] | 条目内选项集：2–4 个互斥走法，见下 |
+| `items[].preferred` | string | 可选：标一个"我倾向"的 `value`（只是徽标，不预选） |
 
 默认判动词：`同意` / `要改` / `不要`。
+
+### 条目内选项集（一条里有 A/B 两条走法）
+
+```js
+{
+  id: 'p1', title: 'hidden 渠道作品的详情页', desc: '两条路挑一条',
+  preferred: 'A',
+  options: [
+    { value: 'A', label: '详情 404', why: '§EN-1 的字面是「完全不可见」' },
+    { value: 'B', label: '200 但不给预览', why: '要给 DemoDetail 加 previewable 字段' },
+  ],
+}
+```
+
+- 回执写 `p1 A` / `p1 B`——**value 就是判定词**，所以它要短、无空格、同条目内唯一（≤12 个字母数字 `._-`）。
+- `label` 是给人看的名字（≤40 字）；`why` 是理由（≤300 字，**不许空行 / 列表 / 表格**，段落级内容搬进 `blocks`）。
+- 一条 2–4 个选项：1 个是确认不是选择，5 个以上用户就不比较了（该拆页面）。
+- 带 `options` 的条目**不再显示页级判定词**，但备注框还在；回执词表会把 value 并进去。
+- `pick` 的 `candidates[]` 上没有这组字段——候选是"挑对象"，不是"挑走法"。
 
 ---
 

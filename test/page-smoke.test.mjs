@@ -91,7 +91,13 @@ function makeElement(id) {
       },
     },
     addEventListener(type, handler) { this.handlers[type] = handler },
-    appendChild(child) { this.children.push(child); return child },
+    // 子节点的 HTML 也并进 innerHTML：有些页面是 createElement 逐行拼的，
+    // 只记 appendChild 会让"渲染出内容了吗"和 id 可见性两条断言看不见它们。
+    appendChild(child) {
+      this.children.push(child)
+      if (child && typeof child.innerHTML === 'string' && child.innerHTML !== '') this.innerHTML += child.innerHTML
+      return child
+    },
     getAttribute(name) { return name in attributes ? attributes[name] : null },
     setAttribute(name, value) { attributes[name] = String(value) },
     focus() {},
@@ -172,7 +178,9 @@ for (const target of targets) {
     const verdicts = [...new Set([...items.innerHTML.matchAll(/data-w="([^"]+)"/g)].map((m) => m[1]))]
     check('页面把用到的判定词都列了出来（skill 契约）', () => {
       assert.ok(verdicts.length >= 2, `只解析到 ${verdicts.length} 个判定词`)
-      const words = elements.get('words').innerHTML
+      // 有的页面把词表写死在 HTML 里（静态 chips），没有 `#words` 这个渲染目标；
+      // 那时就退回整页文本 —— 契约是"列出来了"，不是"由脚本渲染的"。
+      const words = elements.has('words') ? elements.get('words').innerHTML : html
       for (const word of verdicts) assert.ok(words.includes(word), `词表里没有「${word}」`)
     })
     check('汇总区是可选中复制的 textarea', () => assert.match(html, /<textarea[^>]*id="out"[^>]*readonly/))
@@ -184,6 +192,7 @@ for (const target of targets) {
       items.handlers.click({
         target: {
           dataset: { id: firstId, w: '同意' },
+          tagName: 'BUTTON',
           className: 'vbtn',
           getAttribute: (name) => (name === 'data-id' ? firstId : name === 'data-w' ? '同意' : null),
           classList: { contains: (n) => n === 'vbtn' },
