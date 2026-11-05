@@ -874,6 +874,55 @@ check('过期草稿被顺手清掉（30 天）', () =>
   assert.ok(!afterPrune.includes(`${staleName}.json`), '40 天前的草稿还在'),
 )
 
+console.log('\n[矩阵] 候选 × 维度')
+
+/** 跑一个只有矩阵块的页面：成功返回 null，失败返回 error。 */
+async function runMatrix(name, block, extra) {
+  const target = `.dsh/showme/mx-${name}.html`
+  await writeFile(join(workspace, '.dsh', 'showme', `mx-${name}.html`), pageBody, 'utf8')
+  const body = `{ title: 'x'${extra ? ', ' + extra : ''}, sections: [{ heading: '对比', blocks: [${block}] }] }`
+  await writeFile(join(workspace, '.dsh', 'showme', `mx-${name}.data.js`), `window.SHOWME = ${body}\n`, 'utf8')
+  return tool.execute({ path: target }, exec).then(
+    () => null,
+    (error) => error,
+  )
+}
+
+const goodMatrix = "{ type: 'matrix', scoreMax: 5, head: ['改动量', '风险'], rows: [{ label: 'A', scores: [2, 3], best: true }, { label: 'B', scores: [5, 1], note: '更贵' }], summary: 'A 先做' }"
+const matrixOk = await runMatrix('ok', goodMatrix)
+check('形状正确：放行', () => assert.equal(matrixOk, null, matrixOk === null ? '' : matrixOk.message))
+
+const matrixShort = await runMatrix('short', "{ type: 'matrix', head: ['a', 'b'], rows: [{ label: 'A', scores: [2] }, { label: 'B', scores: [1, 2] }] }")
+check('scores 个数和 head 对不上：失败并点名那一行', () => {
+  assert.ok(matrixShort !== null, '行列对不上没被拦')
+  assert.match(matrixShort.message, /矩阵/)
+  assert.match(matrixShort.message, /scores 是 1 个/)
+})
+
+const matrixRange = await runMatrix('range', "{ type: 'matrix', head: ['a', 'b'], rows: [{ label: 'A', scores: [9, 1] }, { label: 'B', scores: [1, 2] }] }")
+check('分数超出 scoreMax：失败并说明 0–5', () => {
+  assert.ok(matrixRange !== null, '越界分数没被拦')
+  assert.match(matrixRange.message, /0–5/)
+})
+
+const matrixDash = await runMatrix('dash', "{ type: 'matrix', head: ['a', 'b'], rows: [{ label: 'A', scores: ['—', 1] }, { label: 'B', scores: [1, 2] }] }")
+check("'—' 表示这一维不适用：放行", () => assert.equal(matrixDash, null, matrixDash === null ? '' : matrixDash.message))
+
+const matrixBest = await runMatrix('best', "{ type: 'matrix', head: ['a', 'b'], rows: [{ label: 'A', scores: [1, 1], best: true }, { label: 'B', scores: [1, 2], best: true }] }")
+check('标了两行 best：失败（它表达倾向，不是排名）', () => {
+  assert.ok(matrixBest !== null, '两个 best 没被拦')
+  assert.match(matrixBest.message, /只能标一行/)
+})
+
+const matrixRows = await runMatrix('rows', "{ type: 'matrix', head: ['a', 'b'], rows: [{ label: 'A', scores: [1, 1] }] }")
+check('只有 1 行候选：失败（那是确认不是比较）', () => {
+  assert.ok(matrixRows !== null, '1 行没被拦')
+  assert.match(matrixRows.message, /2–8/)
+})
+
+const matrixPlain = await runMatrix('plain', "{ type: 'matrix', head: ['a'], rows: [{ label: 'A', scores: [1] }] }", 'plain: true')
+check('页面标了 plain: true：整页跳过矩阵校验（逃生阀）', () => assert.equal(matrixPlain, null, matrixPlain === null ? '' : matrixPlain.message))
+
 console.log('\\n[markdown] 结构型 md 就当场失败，行内不拦')
 
 // 模板页 = 同目录有同名 .data.js。数据里写 md 表格 → 这次调用应该直接失败。

@@ -218,9 +218,28 @@ window.SHOWME = {
 | `code` | `text` | `{ type: 'code', text: 'const a = 1' }` |
 | `chips` | `items`（字符串或 `{text,accent?}`） | `{ type: 'chips', items: ['甲', { text: '乙', accent: true }] }` |
 | `stat` | `num`、`text?` | `{ type: 'stat', num: '42', text: '个片段' }` |
+| `matrix` | `head`、`rows[]{label,scores,best?,note?}`、`scoreMax?`、`summary?` | 见下 |
 | `rule` | — | `{ type: 'rule' }` |
 
 `tone` 可取 `good` / `warn` / `bad`（不写就是中性）。
+
+### 决策矩阵（候选 × 维度，一条里有几条路各打几分）
+
+```js
+{ type: 'matrix', scoreMax: 5,
+  head: ['改动量', '风险', '收益'],
+  rows: [
+    { label: 'A · 只改词表', scores: [2, 3, 2], best: true, note: '一行字段就够' },
+    { label: 'B · 独立形状', scores: [5, 4, 4], note: '要动四套骨架' },
+  ],
+  summary: 'A 改动最小，B 上限最高 —— 先做 A，B 等有第二个用例再说' }
+```
+
+- 每行 `scores` 个数必须等于 `head` 个数；分数是 `0`–`scoreMax` 的整数，或 `'—'`（这一维不适用）。
+- `best: true` 只能标一行：它表达"我倾向这个"，**不是排名**——排名靠格子本身看。
+- `head` 2–6 列、`rows` 2–8 行；超了就拆页面（人一次比较不了更多）。
+- 分数画成刻度（`●●●○○`），所以别在 `label` 里再写数字。
+- 写坏了（行列对不上、分数越界、标了两行 best）会让 `show_html` 直接失败并点名哪一行。
 
 `report` 每小节**默认自带一个轻回执**（判动词 `没意见` / `要改`）。
 如果你确实不需要任何回执（纯图示），写 `sectionReceipt: false`。

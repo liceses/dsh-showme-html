@@ -199,11 +199,51 @@
         }).join('') + '</div>'
       case 'stat':
         return '<div class="stat"><b class="num">' + esc(one.num) + '</b><span>' + inlineMd(one.text || '') + '</span></div>'
+      case 'matrix':
+        return matrixHtml(one)
       case 'rule':
         return '<hr class="rule">'
       default:
         return ''
     }
+  }
+
+  /**
+   * 决策矩阵：候选 × 维度打分。
+   *
+   * 为什么不用表格：表格只给数字，读者还要自己加总；矩阵把每格画成刻度，
+   * 并允许标一个 `best`（就是"我倾向这个"），于是"哪一行明显更好"是看出来的，不是算出来的。
+   * 分数用文字圆点拼（`●○`）而不是 SVG/图片：四套皮肤都能继承文字色，也不会多一个请求。
+   */
+  function matrixHtml(one) {
+    var head = list(one.head)
+    if (head.length === 0) return ''
+    var max = typeof one.scoreMax === 'number' && one.scoreMax > 0 ? Math.min(Math.round(one.scoreMax), 9) : 5
+    var headHtml = '<th>' + inlineMd(one.labelHead || '方案') + '</th>' +
+      head.map(function (name) { return '<th>' + inlineMd(name) + '</th>' }).join('')
+    var rows = list(one.rows).map(function (row) {
+      var cells = list(row && row.scores)
+      var best = !!(row && row.best)
+      var scoreHtml = head.map(function (_name, index) {
+        var raw = cells[index]
+        if (raw === '—' || raw === '-') return '<td class="sm-matrixCell"><span class="sm-matrixDash">—</span></td>'
+        var value = typeof raw === 'number' && isFinite(raw) ? Math.max(0, Math.min(Math.round(raw), max)) : 0
+        var dots = ''
+        for (var step = 0; step < max; step += 1) {
+          var on = step < value
+          dots += on ? '<i class="sm-dot">●</i>' : '<i class="sm-dot sm-dotOff">○</i>'
+        }
+        return '<td class="sm-matrixCell"><span class="sm-score" aria-label="' + value + ' / ' + max + '" title="' + value + ' / ' + max + '">' + dots + '</span></td>'
+      }).join('')
+      return '<tr' + (best ? ' class="sm-best"' : '') + '>' +
+        '<th scope="row" class="sm-matrixLabel">' + inlineMd(row && row.label) +
+        (best ? '<span class="sm-bestTag">倾向</span>' : '') + '</th>' + scoreHtml + '</tr>' +
+        (row && row.note ? '<tr class="sm-matrixNote"><td></td><td colspan="' + head.length + '">' + inlineMd(row.note) + '</td></tr>' : '')
+    }).join('')
+    var foot = one.summary
+      ? '<tfoot><tr><td colspan="' + (head.length + 1) + '">' + inlineMd(one.summary) + '</td></tr></tfoot>'
+      : ''
+    return '<table class="table sm-matrix"><thead><tr>' + headHtml + '</tr></thead><tbody>' + rows + '</tbody>' + foot + '</table>'
   }
 
   /** 一个小节的外壳。 */
@@ -882,6 +922,25 @@
     '.sm-optDot{width:13px;height:13px;border-radius:50%;border:1px solid var(--line-strong,#d5dae2);background:var(--surface,#fff);display:inline-block}',
     '.sm-btn.sm-opt[aria-pressed="true"] .sm-optDot{border-color:var(--accent,#3b82f6);background:var(--accent,#3b82f6);box-shadow:inset 0 0 0 3px var(--surface,#fff)}',
 
+    // 决策矩阵：刻度用文字圆点，靠字色继承皮肤
+    '.sm-matrix th, .sm-matrix td{vertical-align:middle}',
+    '.sm-matrix thead th{white-space:nowrap}',
+    '.sm-matrixLabel{text-align:left;font-weight:600;color:var(--ink,#111);white-space:nowrap}',
+    '.sm-matrixCell{white-space:nowrap}',
+    '.sm-score{font:400 13px/1 var(--mono,monospace);letter-spacing:1px}',
+    '.sm-dot{font-style:normal;color:var(--ink-2,#4b5563)}',
+    '.sm-dotOff{color:var(--line-strong,#d5dae2)}',
+    '.sm-matrix tr.sm-best .sm-dot{color:var(--accent,#3b82f6)}',
+    '.sm-matrix tr.sm-best .sm-matrixLabel{color:var(--accent-ink,var(--accent,#3b82f6))}',
+    '.sm-bestTag{margin-left:8px;padding:2px 8px;border-radius:var(--r-pill,999px);background:var(--accent-soft,#eff6ff);border:1px solid var(--accent-line,#bfdbfe);color:var(--accent-ink,#1d4ed8);font:600 11px/1.4 var(--font,sans-serif)}',
+    '.sm-matrixDash{margin-left:6px;color:var(--muted,#8a8a8a);font-size:12px}',
+    '.sm-matrixNote td{color:var(--muted,#8a8a8a);font-size:var(--f-xs,12px);padding-top:0}',
+    '.sm-matrix tfoot td{color:var(--ink-2,#4b5563);font-size:var(--f-sm,13px)}',
+
+    // 宿主能力说明（只在原生文档预览的 blob iframe 里出现）
+    '.sm-hostNote{margin:0 0 18px;padding:10px 14px;border:1px solid var(--accent-line,#bfdbfe);border-radius:var(--r-sm,10px);background:var(--accent-soft,#eff6ff);color:var(--ink-2,#4b5563);font-size:var(--f-sm,13px)}',
+    '.sm-hostNote b{color:var(--accent-ink,#1d4ed8)}',
+
     // 回执区
     '.sm-draft{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 18px;padding:10px 14px;border:1px dashed var(--line-strong,#d5dae2);border-radius:var(--r-sm,10px);background:var(--surface,#fff);font-size:var(--f-sm,13.5px);color:var(--ink-2,#4b5563)}',
     '.sm-draft span{flex:1;min-width:200px}',
@@ -938,8 +997,13 @@
         : '') +
       '</header>'
 
+    // 原生文档预览（blob iframe）只能带走相对的 js/css：图片与 mermaid 会是一片空白。
+    // 与其让人对着裂图猜是"没渲染"还是"文件丢了"，不如在顶部说清楚。
+    // 判断直接看刚拼好的这段 HTML，不依赖 DOM 查询（桩里/真浏览器里结果一致）。
+    var hostNote = urlHasNoFileName() ? hostNoticeHtml(body) : ''
+
     document.getElementById('sm-content').innerHTML =
-      '<div id="sm-banner">' + bannerHtml() + '</div>' + body
+      hostNote + '<div id="sm-banner">' + bannerHtml() + '</div>' + body
 
     if (SHAPE === 'doc') {
       document.getElementById('sm-receipt').innerHTML = docFooterHtml()
@@ -960,6 +1024,25 @@
 
     // 上报"我渲染好了"：卡片据此判断白屏，宿主据此留一份记录（0.3.0）。
     reportRendered({ ok: true, ids: ids.length })
+  }
+
+  /**
+   * 原生文档预览里的能力说明。
+   *
+   * 宿主把 HTML 塞进 blob iframe 时，只打包**相对的静态 `.js` / `.css`**；相对图片、
+   * CSS `url()`、mermaid 的 vendor 脚本都不在其中。没有这句提示，用户看到的是"图裂了"，
+   * 会以为是页面写错了。
+   */
+  function hostNoticeHtml(html) {
+    var text = String(html || '')
+    var missing = []
+    if (text.indexOf('<img') !== -1) missing.push('相对图片')
+    if (text.indexOf('data-mermaid') !== -1 || text.indexOf('mermaid"') !== -1 || text.indexOf("mermaid'") !== -1) {
+      missing.push('mermaid 图')
+    }
+    if (missing.length === 0) return ''
+    return '<div class="sm-hostNote"><b>原生文档预览</b>不会显示 ' + esc(missing.join(' 与 ')) +
+      ' —— 这个宿主只把相对的 js/css 带进 iframe。要看完整效果，用卡片或「浏览器打开」。</div>'
   }
 
   /** 启动：拿到数据（静态引入或按同名推导）并渲染。 */

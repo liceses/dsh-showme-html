@@ -4,7 +4,7 @@
 
 ![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.5.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.6.0-blue.svg)
 ![Client platform](https://img.shields.io/badge/client%20platform-web-lightgrey.svg)
 
 > 让 agent 把成果摊开给你看，让你点着回话。
@@ -330,6 +330,26 @@ skill 用文字规定"回执怎么做"，模型每次都重新实现一遍，于
 `value` 就是判定词（≤12 个字母数字 `._-`、同条目内唯一）；`label` ≤40 字；`why` ≤300 字且不许空行 / 列表 / 表格。
 写坏了（选项数量不对、value 重复或带空格、`preferred` 指向不存在的值、理由超长）同样**当场失败**并指明该怎么改。
 `pick` 的 `candidates[]` 上没有这组字段——候选是"挑对象"，不是"挑走法"。
+
+**几条路各打几分，用 `matrix` 块。** "A 快但风险高、B 慢但稳"这种话说三遍都很虚，排成格子一眼就完：
+
+```js
+{ type: 'matrix', scoreMax: 5,
+  head: ['改动量', '风险', '收益'],
+  rows: [
+    { label: 'A · 只改词表', scores: [2, 3, 2], best: true, note: '一行字段就够' },
+    { label: 'B · 独立形状', scores: [5, 4, 4], note: '要动四份骨架' },
+    { label: 'C · 不适用的一维', scores: ['—', 4, 3] },
+  ],
+  summary: '先做 A，B 等第二个用例再动' }
+```
+
+分数画成刻度（`●●●○○`），`best: true` 只标一行并显示「倾向」——它表达倾向，**不是排名**；
+`'—'` 表示这一维不适用。`head` 2–6 列、`rows` 2–8 行，`scores` 个数必须和 `head` 对齐、分数在 `0..scoreMax` 内，
+写坏了（对不齐、越界、标了两行 best）同样**当场失败**并点名哪一行。
+
+![决策矩阵块](docs/screenshots/matrix-block.png)
+*图 · `matrix` 块渲染出来长这样：分数是刻度不是数字，`best` 行描边 + 「倾向」标签，`'—'` 只给破折号，行备注单独一行，`summary` 落在表尾。*
 
 宿主在你第一次展示页面时把骨架落到 `.dsh/showme/templates/`（create-only）：
 
@@ -661,13 +681,16 @@ DSH 自己的错误行（`turn-error`）用的就是同一招。工具行留着�
   （这就是它现在待在底部条里的原因）。
 - **Windows 桌面端顶部 40px 被原生窗口按钮占用**：那是 Electron `titleBarOverlay` 画的
   **原生**图层，画在网页之上，`z-index` 再大也盖不过去。插件自己的控件一律避开那一条。
-- **别把展示页交给原生文档预览看**（卡片右下角那个路径按钮走的就是它）：
+- **原生文档预览只能带走相对的 js/css**（卡片右下角那个路径按钮走的就是它）：
   `ui-sidebar-documentpreview` 会把 HTML 塞进一个 **blob iframe**，只把相对的
-  `.js` / `.css` 打包进去。于是**相对的图片、下级页、CSS `url()`**，以及模板内核
-  "按自己的文件名推导数据文件"这件事，**全部失效**（现象：报"没找到数据文件：<一串 uuid>.data.js"）。
-  要看这一页请用**卡片 / 侧栏打开 / 浏览器打开**这三条路 —— 它们都走镜像路由。
-  模板页若确实要在原生文档预览里也能起来，把数据改成**静态引入**
-  （见 `templates/README.md` 的"宿主差异"一节）。
+  `.js` / `.css` 打包进去。于是**相对的图片、下级页、CSS `url()`** 看不见，mermaid 也不渲染。
+  现在页面自己会说这件事：宿主给不出文件名、而页面里确实有图或 mermaid 时，顶部出现一条
+  「原生文档预览不会显示……」的说明（没有图就不出现，不制造噪音）。
+  模板页要让数据也能进去，把数据改成**静态引入**（在 `core.js` 之前加一行
+  `<script src="页面名.data.js"></script>`，四份骨架的注释里写着怎么换）—— 那样在 blob 里也能渲染出内容，
+  只是图仍然是空的。要看完整效果仍然走**卡片 / 侧栏打开 / 浏览器打开**。
+  （还有一条路：插件可以自注册一个 `priority: 'extension'` 的 `html` 文档预览实现，用我们自己的镜像路由渲染，
+  图和 mermaid 就都活了 —— 但那会接管**所有** `.html` 的右栏预览，需要你点头，这版没做。）
 - **mermaid 只在卡片的原路径上渲染**：图由 `/api/showme/vendor/…` 那条路由供的脚本画出来，
   所以**原生文档预览里不渲染**（blob iframe 连不上那条路由），页面里会是一片源码。
 - **mermaid 预检只查语法、只扫静态块**：运行时失败与 JS 动态拼出来的块拦不住；
@@ -703,7 +726,7 @@ docs/                 需求演进与定稿方案
 ## 开发
 
 ```powershell
-npm test                # 486 项离线断言：清单 7 / 宿主 176 / mermaid 35 / 客户端 102 / 预设 38 / 模板 79 / 页面 49
+npm test                # 501 项离线断言：清单 7 / 宿主 183 / mermaid 35 / 客户端 102 / 预设 38 / 模板 87 / 页面 49
                         # （Windows 上建不出软链接时，宿主那组会多打一行 skip，**不计入** 159）
 
 npm run doctor          # 装机体检：资产 / skill 投递 / profile 装配 / 运行中的路由 / **客户端半区** / 落地副本

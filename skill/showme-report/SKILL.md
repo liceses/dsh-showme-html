@@ -62,6 +62,8 @@ whenToUse: 你准备用 HTML 页面代替长篇 Markdown 向用户汇报；或�
 - **`image` 决定形态**：带了就成卡，不带就走行 —— 别给每条都塞图。
 - **一条里有 A/B 两条走法** → `items[].options`（2–4 个 `{value, label, why}` + 可选 `preferred`），
   回执写 `p1 A`；**别**把两条路写成 `desc` 里的一段话（会撞 240 字上限，而且回执说不出"选哪条"）。
+- **几条路各打几分**（"A 快但风险高"）→ `matrix` 块：`head` 维度、`rows[].scores`（画成刻度）、
+  `best` 标倾向。别用一句话描述打分，也别把数字写进 `label`。
 
 ### 1.2 要画图就写 mermaid
 

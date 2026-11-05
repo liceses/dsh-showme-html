@@ -131,7 +131,7 @@ async function run(shape, data, pageName = 'demo.html', options = {}) {
   // 不在卡片里（浏览器直开）：window.parent === window。
   window.parent = options.standalone === true ? window : { postMessage: (message) => messages.push(message) }
   // 静态引入那条路：数据在 core.js 跑之前就已经在 window 上了。
-  if (host === 'static') window.SHOWME = data
+  if (host === 'static' || options.staticData === true) window.SHOWME = data
 
   const location = {
     href: url,
@@ -415,6 +415,85 @@ check('数据静态引入时：不再去取数据文件（只注入了样式）'
 check('数据静态引入时：照样渲染出标题', () =>
   assert.match(staticHost.head.innerHTML, /静态引入/),
 )
+
+console.log('\n[矩阵] 决策矩阵渲染')
+
+const matrixResult = await run('report', {
+  title: '三条路',
+  sections: [{
+    heading: '对比',
+    sectionReceipt: false,
+    blocks: [{
+      type: 'matrix', scoreMax: 5,
+      head: ['改动量', '风险'],
+      rows: [
+        { label: 'A · 只改词表', scores: [2, 3], best: true, note: '一行字段就够' },
+        { label: 'B · 独立形状', scores: [5, 1] },
+        { label: 'C · 决策矩阵', scores: ['—', 4] },
+      ],
+      summary: '先 A，B 等第二个用例',
+    }],
+  }],
+})
+check('矩阵块渲染成表格，维度名在表头', () => {
+  const html = matrixResult.content.innerHTML
+  assert.ok(html.includes('class="table sm-matrix"'), '没有矩阵表格')
+  assert.ok(html.includes('<th>改动量</th>') && html.includes('<th>风险</th>'), '维度名丢了')
+  assert.match(html, /class="sm-matrixLabel"[^>]*>A · 只改词表/)
+})
+check('分数画成刻度，不是数字', () => {
+  const html = matrixResult.content.innerHTML
+  assert.equal((html.match(/<i class="sm-dot">●<\/i>/g) ?? []).length, 15, '实心点数不对（5 + 6 + 4）')
+  assert.equal((html.match(/<i class="sm-dot sm-dotOff">○<\/i>/g) ?? []).length, 10, '空心点数不对（5 + 4 + 1）')
+  assert.ok(html.includes('class="sm-dot"'), '没有实心态')
+  assert.ok(html.includes('class="sm-dot sm-dotOff"'), '没有空心态')
+  assert.match(html, /aria-label="2 \/ 5"/)
+})
+check("'—' 的格子只显示破折号，不画空刻度", () => {
+  const html = matrixResult.content.innerHTML
+  assert.ok(html.includes('class="sm-matrixDash"'), '没有破折号')
+  assert.equal((html.match(/sm-matrixDash/g) ?? []).length, 1, '破折号格子应该只有一个')
+  assert.ok(!html.includes('aria-label="0 / 5"'), '破折号格子还画了 0/5 的空刻度')
+})
+check('best 行带 class 与「倾向」标签', () => {
+  const html = matrixResult.content.innerHTML
+  assert.ok(html.includes('<tr class="sm-best">'), '没有标出 best 行')
+  assert.match(html, /class="sm-bestTag">倾向/)
+})
+check('行备注另起一行、summary 进 tfoot', () => {
+  const html = matrixResult.content.innerHTML
+  assert.match(html, /class="sm-matrixNote"/)
+  assert.ok(html.includes('一行字段就够'))
+  assert.ok(html.includes('<tfoot>') && html.includes('先 A，B 等第二个用例'))
+})
+
+console.log('\n[宿主差异] 原生文档预览会丢图，页面自己先说一声')
+
+const blobWithImage = await run('report', {
+  sections: [{ heading: '证据', sectionReceipt: false, blocks: [{ type: 'image', src: 'stills/x.svg' }] }],
+}, 'demo.html', { host: 'blob', staticData: true })
+console.log('DEBUG host:', JSON.stringify(blobWithImage.content.innerHTML).slice(0, 300), 'MSG', JSON.stringify(blobWithImage.messages))
+check('blob 宿主 + 有图：顶部说明丢的是什么', () => {
+  const html = blobWithImage.content.innerHTML
+  assert.match(html, /class="sm-hostNote"/)
+  assert.match(html, /原生文档预览/)
+  assert.match(html, /相对图片/)
+  assert.match(html, /浏览器打开/)
+})
+
+const blobTextOnly = await run('report', {
+  sections: [{ heading: '只有文字', sectionReceipt: false, blocks: [{ type: 'text', text: 'x' }] }],
+}, 'demo.html', { host: 'blob', staticData: true })
+check('blob 宿主但页面里没有图：不插入这条说明（不制造噪音）', () => {
+  assert.doesNotMatch(blobTextOnly.content.innerHTML, /class="sm-hostNote"/)
+})
+
+const normalHostWithImage = await run('report', {
+  sections: [{ heading: '证据', sectionReceipt: false, blocks: [{ type: 'image', src: 'stills/x.svg' }] }],
+})
+check('卡片宿主（有文件名）里有图：也不插这条说明', () => {
+  assert.doesNotMatch(normalHostWithImage.content.innerHTML, /class="sm-hostNote"/)
+})
 
 console.log('\n[文档] README 必须覆盖内核真正认的东西')
 

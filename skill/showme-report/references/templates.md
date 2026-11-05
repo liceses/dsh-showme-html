@@ -62,7 +62,11 @@ window.SHOWME = { title:'…', sections:[{ heading:'…', blocks:[ { type:'text'
 | `code` | `text` | 代码块（**不参与行内 markdown**） |
 | `chips` | `items[]` | 字符串或 `{text, accent?}` |
 | `stat` | `num` | `text?`；一排数字 |
+| `matrix` | `head[]`、`rows[{label,scores}]` | 候选 × 维度打几分（`scoreMax?` 默认 5、`best?` 只许一行、`'—'` = 不适用、`summary?` 进表尾） |
 | `rule` | — | 分隔线 |
+
+> 「A 快但风险高、B 慢但稳」这种比较，**一句话说不清就上 `matrix`**：`scores` 画成刻度、`best` 标倾向。
+> `head` 2–6 列、`rows` 2–8 行，行列对不上 / 分数越界 / 标两行 best 都会让 `show_html` 失败。
 
 ## 写坏了的条目长什么样
 
